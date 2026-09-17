@@ -1,0 +1,38 @@
+pysta 期望值核对
+==============================================================================
+  示例                                约束                                                    期望          实测  结论
+  ------------------------------------------------------------------------------------------------------------
+  ex0_clk_attr                      budget = Tclk - Tco - Tsu - uncertainty            7.5ns       7.5ns  OK
+  ex1_reg2reg                       TN <= Tclk - Tco - Tsu - Tuncertainty                8ns         8ns  OK
+  ex2_in2reg                        budget = Tclk - input_delay - Tsu                 11.6ns      11.6ns  OK
+  ex3_reg2out                       budget = Tclk - Tco - output_delay                12.6ns      12.6ns  OK
+  ex4_in2out                        budget = Tclk - input_delay - output_delay        18.8ns      18.8ns  OK
+  ex5_multi_clk_in                  最严格 budget = 10 - 5.5 - Tsu                        3.5ns       3.5ns  OK
+  ex5_multi_clk_in                  最差发送沿落在第二个沿 30ns，而不是 0ns                            30ns        30ns  OK
+  ex5_multi_clk_in                  对应的捕获沿落在 40ns                                       40ns        40ns  OK
+  ex6_multi_clk_out                 最严格 budget = 20/3 - 2.5 - Tco                  3.16667ns   3.16667ns  OK
+  ex6_multi_clk_out                 clkc 周期 = 1.0/75*1000 = 40/3 ns（精确值）           13.3333ns   13.3333ns  OK
+  ex6_multi_clk_out                 最差发送沿是 20ns（不是 0ns）                                 20ns        20ns  OK
+  ex6_multi_clk_out                 最差捕获沿 26.667ns（即精确的 80/3 ns）                   26.6667ns   26.6667ns  OK
+  ex6_multi_clk_out                 端口 B 的两条 output_delay 都保留了（-add_delay 生效）              2           2  OK
+  ex7_async_cdc                     被 set_false_path 屏蔽的跨时钟域路径条数                           2           2  OK
+  ex7_async_cdc                     没有剩下未被屏蔽的 reg->reg 路径                                  0           0  OK
+  ex7_async_cdc                     时钟周期：clka = 20ns（50MHz）                             20ns        20ns  OK
+  ex7_async_cdc                     时钟周期：clkb = 10ns（100MHz）                            10ns        10ns  OK
+  ex8_pseudo_path                   被屏蔽的交叉伪路径条数                                            2           2  OK
+  ex8_pseudo_path                   仍参与时序检查的真实通路条数                                         2           2  OK
+  ex8_pseudo_path                   真实通路 budget = Tclk - input_delay - output_delay         5ns         5ns  OK
+  ex9_multicycle_adder              budget = 6*Tclk - Tco - Tsu                         58ns        58ns  OK
+  ex9_multicycle_adder              建立捕获沿落在第 6 个上升沿 60ns                                60ns        60ns  OK
+  ex9_multicycle_adder              保持检查沿被 -hold 5 拉回 0ns                                0ns         0ns  OK
+  ex9_multicycle_adder              多周期数 setup/hold                                      6/5         6/5  OK
+  ex9_multicycle_adder              保持裕量为正（约束合理）                                           是           是  OK
+  ex9b_multicycle_adder_default_hold保持检查沿停在 50ns（建立沿的前一个沿）                              50ns        50ns  OK
+  ex9b_multicycle_adder_default_hold保持违例严重（证明这条约束是错的）                                      是           是  OK
+  ex9b_multicycle_adder_default_hold建立 budget 本身没问题，仍是 58ns                             58ns        58ns  OK
+  ex10_multicycle_mixed             乘法路径被识别为 setup=2 / hold=1                            2/1         2/1  OK
+  ex10_multicycle_mixed             乘法路径 budget = 20 - Tco - Tsu                      17.9ns      17.9ns  OK
+  ex10_multicycle_mixed             异或路径仍是默认的 setup=1 / hold=0                           1/0         1/0  OK
+  ex10_multicycle_mixed             异或路径 budget = 10 - Tco - Tsu                       7.9ns       7.9ns  OK
+
+  合计: 32/32 通过

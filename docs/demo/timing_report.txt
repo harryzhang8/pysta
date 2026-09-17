@@ -1,0 +1,828 @@
+pysta 时序分析报告
+==============================================================================
+==============================================================================
+设计: ex0_clk_attr    网表: ex0_clk_attr.v    SDC: ex0_clk_attr.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 10.0000    ns  waveform = [0, 5]  (源端口 clk)   [uncertainty(setup)=0.5, source_latency=3, network_latency=1, transition_max=0.2]
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->reg      FF1/CP         FF2/D             0.0600    7.5000    7.4400    0.5600    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF2/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  clock source latency (source)             3.0000      3.0000
+  clock network delay (network)             1.0000      4.0000
+  FF1/CP (DFFRQ)                                 -      4.0000
+  FF1/Q (DFFRQ)                             1.0000      5.0000    <- Tco  CP->Q 翻转时间
+  U1/A                                      0.0000      5.0000
+  U1/Y (INVX1)                              0.0600      5.0600    <- INVX1
+  FF2/D                                     0.0000      5.0600
+  data arrival time                                     5.0600
+
+  clock clk (rise edge)                    10.0000     10.0000    <- 第 1 个捕获沿
+  clock source latency (source)             3.0000     13.0000
+  clock network delay (network)             1.0000     14.0000
+  clock uncertainty                        -0.5000     13.5000    <- set_clock_uncertainty
+  FF2/D (DFFRQ)                                  -     13.5000
+  library setup time                       -1.0000     12.5000    <- Tsu = 1ns
+  data required time                                   12.5000
+  --------------------------------------------------------------------------
+  data required time                                   12.5000
+  data arrival time                                    -5.0600
+  --------------------------------------------------------------------------
+  slack (MET)                                           7.4400
+
+  >>> 组合逻辑时序预算(budget) = 7.5000ns   实际组合延时 = 0.0600ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 5.0600ns   需求 = 4.5000ns
+  slack hold (MET)                                                     0.5600
+
+==============================================================================
+设计: ex1_reg2reg    网表: ex1_reg2reg.v    SDC: ex1_reg2reg.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 10.0000    ns  waveform = [0, 5]  (源端口 clk)
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->reg      FF1/CP         FF2/D             0.1350    8.0000    7.8650    0.6350    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF2/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.0000      1.0000    <- Tco  CP->Q 翻转时间
+  U1/A                                      0.0000      1.0000
+  U1/Y (INVX1)                              0.0600      1.0600    <- INVX1
+  U2/A                                      0.0000      1.0600
+  U2/Y (NAND2X1)                            0.0750      1.1350    <- NAND2X1
+  FF2/D                                     0.0000      1.1350
+  data arrival time                                     1.1350
+
+  clock clk (rise edge)                    10.0000     10.0000    <- 第 1 个捕获沿
+  FF2/D (DFFRQ)                                  -     10.0000
+  library setup time                       -1.0000      9.0000    <- Tsu = 1ns
+  data required time                                    9.0000
+  --------------------------------------------------------------------------
+  data required time                                    9.0000
+  data arrival time                                    -1.1350
+  --------------------------------------------------------------------------
+  slack (MET)                                           7.8650
+
+  >>> 组合逻辑时序预算(budget) = 8.0000ns   实际组合延时 = 0.1350ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 1.1350ns   需求 = 0.5000ns
+  slack hold (MET)                                                     0.6350
+
+==============================================================================
+设计: ex2_in2reg    网表: ex2_in2reg.v    SDC: ex2_in2reg.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 20.0000    ns  waveform = [0, 10]  (源端口 clk)
+
+[ 输入端口约束 ]
+  A          max = 7.400    ns  -clock clk
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  input->reg    A              FF2/D             0.2300   11.6000   11.3700    7.1300    MET
+  input->reg    A              FF2/D             0.2250   11.6000   11.3750    7.1250    MET
+  input->reg    A              FF2/D             0.0950   11.6000   11.5050    6.9950    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: A  (input port)
+Endpoint  : FF2/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  A (input port)                                 -      0.0000
+  input delay                               0.0000      0.0000    <- set_input_delay
+  U1/B                                      0.0000      0.0000
+  U1/Y (NAND2X1)                            0.0800      0.0800    <- NAND2X1
+  U2/A                                      0.0000      0.0800
+  U2/Y (INVX1)                              0.0600      0.1400    <- INVX1
+  U3/A                                      0.0000      0.1400
+  U3/Y (AND2X1)                             0.0900      0.2300    <- AND2X1
+  FF2/D                                     0.0000      0.2300
+  data arrival time                                     7.6300
+
+  clock clk (rise edge)                    20.0000     20.0000    <- 第 1 个捕获沿
+  FF2/D (DFFRQ)                                  -     20.0000
+  library setup time                       -1.0000     19.0000    <- Tsu = 1ns
+  data required time                                   19.0000
+  --------------------------------------------------------------------------
+  data required time                                   19.0000
+  data arrival time                                    -7.6300
+  --------------------------------------------------------------------------
+  slack (MET)                                          11.3700
+
+  >>> 组合逻辑时序预算(budget) = 11.6000ns   实际组合延时 = 0.2300ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 7.6300ns   需求 = 0.5000ns
+  slack hold (MET)                                                     7.1300
+
+
+===== 路径 #2 =====
+Startpoint: A  (input port)
+Endpoint  : FF2/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  A (input port)                                 -      0.0000
+  input delay                               0.0000      0.0000    <- set_input_delay
+  U1/A                                      0.0000      0.0000
+  U1/Y (NAND2X1)                            0.0750      0.0750    <- NAND2X1
+  U2/A                                      0.0000      0.0750
+  U2/Y (INVX1)                              0.0600      0.1350    <- INVX1
+  U3/A                                      0.0000      0.1350
+  U3/Y (AND2X1)                             0.0900      0.2250    <- AND2X1
+  FF2/D                                     0.0000      0.2250
+  data arrival time                                     7.6250
+
+  clock clk (rise edge)                    20.0000     20.0000    <- 第 1 个捕获沿
+  FF2/D (DFFRQ)                                  -     20.0000
+  library setup time                       -1.0000     19.0000    <- Tsu = 1ns
+  data required time                                   19.0000
+  --------------------------------------------------------------------------
+  data required time                                   19.0000
+  data arrival time                                    -7.6250
+  --------------------------------------------------------------------------
+  slack (MET)                                          11.3750
+
+  >>> 组合逻辑时序预算(budget) = 11.6000ns   实际组合延时 = 0.2250ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 7.6250ns   需求 = 0.5000ns
+  slack hold (MET)                                                     7.1250
+
+==============================================================================
+设计: ex3_reg2out    网表: ex3_reg2out.v    SDC: ex3_reg2out.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 20.0000    ns  waveform = [0, 10]  (源端口 clk)
+
+[ 输出端口约束 ]
+  B          max = 6.400    ns  -clock clk
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->output   FF1/CP         B                 0.1100   12.6000   12.4900         -    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : B  (output port)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->output
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.0000      1.0000    <- Tco  CP->Q 翻转时间
+  U1/A                                      0.0000      1.0000
+  U1/Y (INVX1)                              0.0600      1.0600    <- INVX1
+  U2/A                                      0.0000      1.0600
+  U2/Y (BUFX1)                              0.0500      1.1100    <- BUFX1
+  B                                         0.0000      1.1100
+  data arrival time                                     1.1100
+
+  clock clk (rise edge)                    20.0000     20.0000    <- 第 1 个捕获沿
+  output delay                             -6.4000     13.6000    <- set_output_delay
+  data required time                                   13.6000
+  --------------------------------------------------------------------------
+  data required time                                   13.6000
+  data arrival time                                    -1.1100
+  --------------------------------------------------------------------------
+  slack (MET)                                          12.4900
+
+  >>> 组合逻辑时序预算(budget) = 12.6000ns   实际组合延时 = 0.1100ns
+
+==============================================================================
+设计: ex4_in2out    网表: ex4_in2out.v    SDC: ex4_in2out.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 20.0000    ns  waveform = [0, 10]  (源端口 clk)
+
+[ 输入端口约束 ]
+  C          max = 0.400    ns  -clock clk  -add_delay
+
+[ 输出端口约束 ]
+  D          max = 0.800    ns  -clock clk  -add_delay
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  input->output C              D                 0.2400   18.8000   18.5600         -    MET
+  input->output C              D                 0.1850   18.8000   18.6150         -    MET
+  input->output C              D                 0.0650   18.8000   18.7350         -    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: C  (input port)
+Endpoint  : D  (output port)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->output
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  C (input port)                                 -      0.0000
+  input delay                               0.0000      0.0000    <- set_input_delay
+  U1/A                                      0.0000      0.0000
+  U1/Y (INVX1)                              0.0600      0.0600    <- INVX1
+  U2/A                                      0.0000      0.0600
+  U2/Y (XOR2X1)                             0.1200      0.1800    <- XOR2X1
+  U3/A                                      0.0000      0.1800
+  U3/Y (OR2X1)                              0.0600      0.2400    <- OR2X1
+  D                                         0.0000      0.2400
+  data arrival time                                     0.6400
+
+  clock clk (rise edge)                    20.0000     20.0000    <- 第 1 个捕获沿
+  output delay                             -0.8000     19.2000    <- set_output_delay
+  data required time                                   19.2000
+  --------------------------------------------------------------------------
+  data required time                                   19.2000
+  data arrival time                                    -0.6400
+  --------------------------------------------------------------------------
+  slack (MET)                                          18.5600
+
+  >>> 组合逻辑时序预算(budget) = 18.8000ns   实际组合延时 = 0.2400ns
+
+
+===== 路径 #2 =====
+Startpoint: C  (input port)
+Endpoint  : D  (output port)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->output
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  C (input port)                                 -      0.0000
+  input delay                               0.0000      0.0000    <- set_input_delay
+  U2/B                                      0.0000      0.0000
+  U2/Y (XOR2X1)                             0.1250      0.1250    <- XOR2X1
+  U3/A                                      0.0000      0.1250
+  U3/Y (OR2X1)                              0.0600      0.1850    <- OR2X1
+  D                                         0.0000      0.1850
+  data arrival time                                     0.5850
+
+  clock clk (rise edge)                    20.0000     20.0000    <- 第 1 个捕获沿
+  output delay                             -0.8000     19.2000    <- set_output_delay
+  data required time                                   19.2000
+  --------------------------------------------------------------------------
+  data required time                                   19.2000
+  data arrival time                                    -0.5850
+  --------------------------------------------------------------------------
+  slack (MET)                                          18.6150
+
+  >>> 组合逻辑时序预算(budget) = 18.8000ns   实际组合延时 = 0.1850ns
+
+==============================================================================
+设计: ex5_multi_clk_in    网表: ex5_multi_clk_in.v    SDC: ex5_multi_clk_in.sdc
+==============================================================================
+
+[ 时钟 ]
+  clka       period = 30.0000    ns  waveform = [0, 15]  (虚拟时钟)
+  clkb       period = 20.0000    ns  waveform = [0, 10]  (源端口 clkb)
+
+[ 输入端口约束 ]
+  A          max = 5.500    ns  -clock clka
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  input->reg    A              FF2/D             0.1350    3.5000    3.3650    5.1350    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: A  (input port)
+Endpoint  : FF2/D  (rising edge-triggered flip-flop clocked by clkb)
+Path Group: clka -> clkb
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clka (rise edge)                   30.0000     30.0000
+  A (input port)                                 -     30.0000
+  input delay                               0.0000     30.0000    <- set_input_delay
+  U1/A                                      0.0000     30.0000
+  U1/Y (INVX1)                              0.0600     30.0600    <- INVX1
+  U2/A                                      0.0000     30.0600
+  U2/Y (BUFX1)                              0.0750     30.1350    <- BUFX1
+  FF2/D                                     0.0000     30.1350
+  data arrival time                                    35.6350
+
+  clock clkb (rise edge)                   40.0000     40.0000    <- 第 1 个捕获沿
+  FF2/D (DFFRQ)                                  -     40.0000
+  library setup time                       -1.0000     39.0000    <- Tsu = 1ns
+  data required time                                   39.0000
+  --------------------------------------------------------------------------
+  data required time                                   39.0000
+  data arrival time                                   -35.6350
+  --------------------------------------------------------------------------
+  slack (MET)                                           3.3650
+
+  >>> 组合逻辑时序预算(budget) = 3.5000ns   实际组合延时 = 0.1350ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 35.6350ns   需求 = 0.5000ns
+  slack hold (MET)                                                     5.1350
+
+==============================================================================
+设计: ex6_multi_clk_out    网表: ex6_multi_clk_out.v    SDC: ex6_multi_clk_out.sdc
+==============================================================================
+
+[ 时钟 ]
+  clkc       period = 13.3333    ns  waveform = [0, 6.66667]  (虚拟时钟)
+  clkd       period = 10.0000    ns  waveform = [0, 5]  (虚拟时钟)
+  clkb       period = 20.0000    ns  waveform = [0, 10]  (源端口 clkb)
+
+[ 输出端口约束 ]
+  B          max = 2.500    ns  -clock clkc
+  B          max = 4.500    ns  -clock clkd  -add_delay
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->output   FF1/CP         B                 0.1100    3.1667    3.0567         -    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clkb)
+Endpoint  : B  (output port)
+Path Group: clkb -> clkc
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->output
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clkb (rise edge)                   20.0000     20.0000
+  FF1/CP (DFFRQ)                                 -     20.0000
+  FF1/Q (DFFRQ)                             1.0000     21.0000    <- Tco  CP->Q 翻转时间
+  U1/A                                      0.0000     21.0000
+  U1/Y (INVX1)                              0.0600     21.0600    <- INVX1
+  U2/A                                      0.0000     21.0600
+  U2/Y (BUFX1)                              0.0500     21.1100    <- BUFX1
+  B                                         0.0000     21.1100
+  data arrival time                                    21.1100
+
+  clock clkc (rise edge)                   26.6667     26.6667    <- 第 1 个捕获沿
+  output delay                             -2.5000     24.1667    <- set_output_delay
+  data required time                                   24.1667
+  --------------------------------------------------------------------------
+  data required time                                   24.1667
+  data arrival time                                   -21.1100
+  --------------------------------------------------------------------------
+  slack (MET)                                           3.0567
+
+  >>> 组合逻辑时序预算(budget) = 3.1667ns   实际组合延时 = 0.1100ns
+
+==============================================================================
+设计: ex7_async_cdc    网表: ex7_async_cdc.v    SDC: ex7_async_cdc.sdc
+==============================================================================
+
+[ 时钟 ]
+  clka       period = 20.0000    ns  waveform = [0, 10]  (源端口 clka)
+  clkb       period = 10.0000    ns  waveform = [0, 5]  (源端口 clkb)
+
+[ 时序例外 ]
+  false_path   from=['clka']  through=-  to=['clkb']
+  false_path   from=['clkb']  through=-  to=['clka']
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->reg      FF_A1/CP       FF_B2/D           0.0600         -         -         -  x EXCLUDED
+  reg->reg      FF_B1/CP       FF_A2/D           0.0750         -         -         -  x EXCLUDED
+
+[ 路径被时序例外屏蔽 ]
+
+===== 路径 #1 =====
+Startpoint: FF_A1/CP  (rising edge-triggered flip-flop clocked by clka)
+Endpoint  : FF_B2/D  (rising edge-triggered flip-flop clocked by clkb)
+Path Group: clka -> clkb
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->reg
+!! 该路径已被时序例外屏蔽: set_false_path from=clka to=clkb
+   （不再做建立时间分析，也不参与优化）
+
+
+===== 路径 #2 =====
+Startpoint: FF_B1/CP  (rising edge-triggered flip-flop clocked by clkb)
+Endpoint  : FF_A2/D  (rising edge-triggered flip-flop clocked by clka)
+Path Group: clkb -> clka
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->reg
+!! 该路径已被时序例外屏蔽: set_false_path from=clkb to=clka
+   （不再做建立时间分析，也不参与优化）
+
+==============================================================================
+设计: ex8_pseudo_path    网表: ex8_pseudo_path.v    SDC: ex8_pseudo_path.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 10.0000    ns  waveform = [0, 5]  (源端口 clk)
+
+[ 输入端口约束 ]
+  A          max = 2.000    ns  -clock clk
+
+[ 输出端口约束 ]
+  B          max = 3.000    ns  -clock clk
+
+[ 时序例外 ]
+  false_path   from=['A']  through=['MUX0/I0', 'MUX1/I1']  to=['B']
+  false_path   from=['A']  through=['MUX0/I1', 'MUX1/I0']  to=['B']
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  input->output A              B                 0.3020    5.0000    4.6980         -    MET
+  input->output A              B                 0.2950    5.0000    4.7050         -    MET
+  input->output A              B                 0.2980         -         -         -  x EXCLUDED
+  input->output A              B                 0.2990         -         -         -  x EXCLUDED
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: A  (input port)
+Endpoint  : B  (output port)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->output
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  A (input port)                                 -      0.0000
+  input delay                               0.0000      0.0000    <- set_input_delay
+  MUX0/I1                                   0.0000      0.0000
+  MUX0/Y (MUX2X1)                           0.1440      0.1440    <- MUX2X1
+  MUX1/I1                                   0.0000      0.1440
+  MUX1/Y (MUX2X1)                           0.1080      0.2520    <- MUX2X1
+  U3/A                                      0.0000      0.2520
+  U3/Y (BUFX1)                              0.0500      0.3020    <- BUFX1
+  B                                         0.0000      0.3020
+  data arrival time                                     2.3020
+
+  clock clk (rise edge)                    10.0000     10.0000    <- 第 1 个捕获沿
+  output delay                             -3.0000      7.0000    <- set_output_delay
+  data required time                                    7.0000
+  --------------------------------------------------------------------------
+  data required time                                    7.0000
+  data arrival time                                    -2.3020
+  --------------------------------------------------------------------------
+  slack (MET)                                           4.6980
+
+  >>> 组合逻辑时序预算(budget) = 5.0000ns   实际组合延时 = 0.3020ns
+
+
+===== 路径 #2 =====
+Startpoint: A  (input port)
+Endpoint  : B  (output port)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : input->output
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  A (input port)                                 -      0.0000
+  input delay                               0.0000      0.0000    <- set_input_delay
+  MUX0/I0                                   0.0000      0.0000
+  MUX0/Y (MUX2X1)                           0.1400      0.1400    <- MUX2X1
+  MUX1/I0                                   0.0000      0.1400
+  MUX1/Y (MUX2X1)                           0.1050      0.2450    <- MUX2X1
+  U3/A                                      0.0000      0.2450
+  U3/Y (BUFX1)                              0.0500      0.2950    <- BUFX1
+  B                                         0.0000      0.2950
+  data arrival time                                     2.2950
+
+  clock clk (rise edge)                    10.0000     10.0000    <- 第 1 个捕获沿
+  output delay                             -3.0000      7.0000    <- set_output_delay
+  data required time                                    7.0000
+  --------------------------------------------------------------------------
+  data required time                                    7.0000
+  data arrival time                                    -2.2950
+  --------------------------------------------------------------------------
+  slack (MET)                                           4.7050
+
+  >>> 组合逻辑时序预算(budget) = 5.0000ns   实际组合延时 = 0.2950ns
+
+==============================================================================
+设计: ex9_multicycle_adder    网表: ex9_multicycle_adder.v    SDC: ex9_multicycle_adder.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 10.0000    ns  waveform = [0, 5]  (源端口 clk)
+
+[ 多周期路径 ]
+  -setup 6   from=-  through=-  to=['FF3[0]/D', 'FF3[1]/D']
+  -hold 5   from=-  through=-  to=['FF3[0]/D', 'FF3[1]/D']
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->reg      FF1/CP         FF3[1]/D          0.5250   58.0000   57.4750    1.0250    MET
+  reg->reg      FF1/CP         FF3[0]/D          0.2700   58.0000   57.7300    0.7700    MET
+  reg->reg      FF4/CP         FF3[1]/D          0.2700   58.0000   57.7300    0.7700    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF3[1]/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=6  hold=5)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.0000      1.0000    <- Tco  CP->Q 翻转时间
+  ADD0/A                                    0.0000      1.0000
+  ADD0/CO (ADDFA)                           0.3000      1.3000    <- ADDFA
+  ADD1/CI                                   0.0000      1.3000
+  ADD1/S (ADDFA)                            0.2250      1.5250    <- ADDFA
+  FF3[1]/D                                  0.0000      1.5250
+  data arrival time                                     1.5250
+
+  clock clk (rise edge)                    60.0000     60.0000    <- 第 6 个捕获沿
+  FF3[1]/D (DFFRQ)                               -     60.0000
+  library setup time                       -1.0000     59.0000    <- Tsu = 1ns
+  data required time                                   59.0000
+  --------------------------------------------------------------------------
+  data required time                                   59.0000
+  data arrival time                                    -1.5250
+  --------------------------------------------------------------------------
+  slack (MET)                                          57.4750
+
+  >>> 组合逻辑时序预算(budget) = 58.0000ns   实际组合延时 = 0.5250ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 1.5250ns   需求 = 0.5000ns
+  slack hold (MET)                                                     1.0250
+
+
+===== 路径 #2 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF3[0]/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=6  hold=5)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.0000      1.0000    <- Tco  CP->Q 翻转时间
+  ADD0/A                                    0.0000      1.0000
+  ADD0/S (ADDFA)                            0.2700      1.2700    <- ADDFA
+  FF3[0]/D                                  0.0000      1.2700
+  data arrival time                                     1.2700
+
+  clock clk (rise edge)                    60.0000     60.0000    <- 第 6 个捕获沿
+  FF3[0]/D (DFFRQ)                               -     60.0000
+  library setup time                       -1.0000     59.0000    <- Tsu = 1ns
+  data required time                                   59.0000
+  --------------------------------------------------------------------------
+  data required time                                   59.0000
+  data arrival time                                    -1.2700
+  --------------------------------------------------------------------------
+  slack (MET)                                          57.7300
+
+  >>> 组合逻辑时序预算(budget) = 58.0000ns   实际组合延时 = 0.2700ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 1.2700ns   需求 = 0.5000ns
+  slack hold (MET)                                                     0.7700
+
+==============================================================================
+设计: ex9_multicycle_adder    网表: ex9_multicycle_adder.v    SDC: ex9b_multicycle_adder_default_hold.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 10.0000    ns  waveform = [0, 5]  (源端口 clk)
+
+[ 多周期路径 ]
+  -setup 6   from=-  through=-  to=['FF3[0]/D', 'FF3[1]/D']
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->reg      FF1/CP         FF3[1]/D          0.5250   58.0000   57.4750  -48.9750    MET
+  reg->reg      FF1/CP         FF3[0]/D          0.2700   58.0000   57.7300  -49.2300    MET
+  reg->reg      FF4/CP         FF3[1]/D          0.2700   58.0000   57.7300  -49.2300    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF3[1]/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=6  hold=0)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.0000      1.0000    <- Tco  CP->Q 翻转时间
+  ADD0/A                                    0.0000      1.0000
+  ADD0/CO (ADDFA)                           0.3000      1.3000    <- ADDFA
+  ADD1/CI                                   0.0000      1.3000
+  ADD1/S (ADDFA)                            0.2250      1.5250    <- ADDFA
+  FF3[1]/D                                  0.0000      1.5250
+  data arrival time                                     1.5250
+
+  clock clk (rise edge)                    60.0000     60.0000    <- 第 6 个捕获沿
+  FF3[1]/D (DFFRQ)                               -     60.0000
+  library setup time                       -1.0000     59.0000    <- Tsu = 1ns
+  data required time                                   59.0000
+  --------------------------------------------------------------------------
+  data required time                                   59.0000
+  data arrival time                                    -1.5250
+  --------------------------------------------------------------------------
+  slack (MET)                                          57.4750
+
+  >>> 组合逻辑时序预算(budget) = 58.0000ns   实际组合延时 = 0.5250ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 50.0000ns   数据到达 = 1.5250ns   需求 = 50.5000ns
+  slack hold (VIOLATED)                                                   -48.9750
+
+
+===== 路径 #2 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF3[0]/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=6  hold=0)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.0000      1.0000    <- Tco  CP->Q 翻转时间
+  ADD0/A                                    0.0000      1.0000
+  ADD0/S (ADDFA)                            0.2700      1.2700    <- ADDFA
+  FF3[0]/D                                  0.0000      1.2700
+  data arrival time                                     1.2700
+
+  clock clk (rise edge)                    60.0000     60.0000    <- 第 6 个捕获沿
+  FF3[0]/D (DFFRQ)                               -     60.0000
+  library setup time                       -1.0000     59.0000    <- Tsu = 1ns
+  data required time                                   59.0000
+  --------------------------------------------------------------------------
+  data required time                                   59.0000
+  data arrival time                                    -1.2700
+  --------------------------------------------------------------------------
+  slack (MET)                                          57.7300
+
+  >>> 组合逻辑时序预算(budget) = 58.0000ns   实际组合延时 = 0.2700ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 50.0000ns   数据到达 = 1.2700ns   需求 = 50.5000ns
+  slack hold (VIOLATED)                                                   -49.2300
+
+==============================================================================
+设计: ex10_multicycle_mixed    网表: ex10_multicycle_mixed.v    SDC: ex10_multicycle_mixed.sdc
+==============================================================================
+
+[ 时钟 ]
+  clk        period = 10.0000    ns  waveform = [0, 5]  (源端口 clk)
+
+[ 多周期路径 ]
+  -setup 2   from=['FF1/CP']  through=['Multiply/out']  to=['FF2/D']
+  -hold 1   from=['FF1/CP']  through=['Multiply/out']  to=['FF2/D']
+
+[ 时序汇总 ]
+  Type          Startpoint     Endpoint            Comb    Budget     Slack      Hold  Verdict
+  --------------------------------------------------------------------------
+  reg->reg      FF1/CP         FF3/D             0.1200    7.9000    7.7800    0.7200    MET
+  reg->reg      FF1/CP         FF2/D             7.0700   17.9000   10.8300    7.6700    MET
+
+[ 最差路径详情 ]
+
+===== 路径 #1 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF3/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=1  hold=0)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.1000      1.1000    <- Tco  CP->Q 翻转时间
+  U1/A                                      0.0000      1.1000
+  U1/Y (XOR2X1)                             0.1200      1.2200    <- XOR2X1
+  FF3/D                                     0.0000      1.2200
+  data arrival time                                     1.2200
+
+  clock clk (rise edge)                    10.0000     10.0000    <- 第 1 个捕获沿
+  FF3/D (DFFRQ)                                  -     10.0000
+  library setup time                       -1.0000      9.0000    <- Tsu = 1ns
+  data required time                                    9.0000
+  --------------------------------------------------------------------------
+  data required time                                    9.0000
+  data arrival time                                    -1.2200
+  --------------------------------------------------------------------------
+  slack (MET)                                           7.7800
+
+  >>> 组合逻辑时序预算(budget) = 7.9000ns   实际组合延时 = 0.1200ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 1.2200ns   需求 = 0.5000ns
+  slack hold (MET)                                                     0.7200
+
+
+===== 路径 #2 =====
+Startpoint: FF1/CP  (rising edge-triggered flip-flop clocked by clk)
+Endpoint  : FF2/D  (rising edge-triggered flip-flop clocked by clk)
+Path Group: clk
+Path Type : max     (多周期: setup=2  hold=1)
+Path Kind : reg->reg
+
+  Point                                       Incr        Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                     0.0000      0.0000
+  FF1/CP (DFFRQ)                                 -      0.0000
+  FF1/Q (DFFRQ)                             1.1000      1.1000    <- Tco  CP->Q 翻转时间
+  Multiply/A                                0.0000      1.1000
+  Multiply/out (MULT8X8)                    6.8000      7.9000    <- MULT8X8
+  Add/A                                     0.0000      7.9000
+  Add/S (ADDFA)                             0.2700      8.1700    <- ADDFA
+  FF2/D                                     0.0000      8.1700
+  data arrival time                                     8.1700
+
+  clock clk (rise edge)                    20.0000     20.0000    <- 第 2 个捕获沿
+  FF2/D (DFFRQ)                                  -     20.0000
+  library setup time                       -1.0000     19.0000    <- Tsu = 1ns
+  data required time                                   19.0000
+  --------------------------------------------------------------------------
+  data required time                                   19.0000
+  data arrival time                                    -8.1700
+  --------------------------------------------------------------------------
+  slack (MET)                                          10.8300
+
+  >>> 组合逻辑时序预算(budget) = 17.9000ns   实际组合延时 = 7.0700ns
+
+  --- 保持时间 (hold) ---
+  保持检查沿 = 0.0000ns   数据到达 = 8.1700ns   需求 = 0.5000ns
+  slack hold (MET)                                                     7.6700
+

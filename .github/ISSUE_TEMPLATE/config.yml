@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Interactive timing report (no install)
+    url: https://harryzhang8.github.io/pysta/
+    about: Browse the generated waveforms for all 12 examples before filing anything.
+  - name: Design notes
+    url: https://github.com/harryzhang8/pysta/blob/main/docs/multicycle-edge-relationships.md
+    about: How the clock-edge relationship and multicycle handling are derived.

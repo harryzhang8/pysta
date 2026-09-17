@@ -21,7 +21,7 @@ from fractions import Fraction
 
 from .timing import AnalysisResult, Design, PathTiming, ZERO
 
-__all__ = ["render_html", "write_html"]
+__all__ = ["render_html", "write_html", "timing_waveform", "representative_path"]
 
 
 # --------------------------------------------------------------------------
@@ -118,6 +118,20 @@ def _clock_polyline(clock, x_of, t0: float, t1: float, y_high: float, y_low: flo
             break
     pts.append((x_of(t1), y_low))
     return pts
+
+
+def representative_path(res: AnalysisResult) -> "PathTiming | None":
+    """挑一条最能说明问题的路径：优先展示违例，否则取 slack 最小的。"""
+    viol = sorted(res.violations(), key=lambda x: x.slack_setup)
+    if viol:
+        return viol[0]
+    hviol = res.hold_violations()
+    if hviol:
+        return sorted(hviol, key=lambda x: x.slack_hold)[0]
+    cons = sorted(res.constrained(), key=lambda x: x.slack_setup)
+    if cons:
+        return cons[0]
+    return res.paths[0] if res.paths else None
 
 
 def timing_waveform(design: Design, pt: PathTiming, width: float = 620.0) -> str:
@@ -379,12 +393,7 @@ def _card(design: Design, res: AnalysisResult, meta: dict, anchor: str) -> str:
     cons = sorted(res.constrained(), key=lambda x: x.slack_setup)
     viol = res.violations()
     hviol = res.hold_violations()
-    if viol:
-        rep = sorted(viol, key=lambda x: x.slack_setup)[0]
-    elif hviol:
-        rep = sorted(hviol, key=lambda x: x.slack_hold)[0]
-    else:
-        rep = cons[0] if cons else (res.paths[0] if res.paths else None)
+    rep = representative_path(res)
 
     if viol or hviol:
         bits = []

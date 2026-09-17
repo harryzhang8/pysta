@@ -12,6 +12,14 @@ Python 标准库。
 
 > [English README](README.md)
 
+**在线演示：** <https://harryzhang8.github.io/pysta/> —— `pysta run` 出来的交互式波形报告，不用安装、不用构建。
+
+---
+
+![ex6 的时序波形：一个发送沿，两个捕获时钟](docs/images/waveform-multiclock.svg)
+
+<sub>`ex6_multi_clk_out` —— `clkb`（10 ns）和 `clkc`（40/3 ns）都在捕同一个发送沿。最差的一组是发送沿 20 ns → 捕获沿 26.667 ns，余量 +3.0567 ns。本 README 里所有波形图都是引擎自己画出来的，见 [`tools/export_diagrams.py`](tools/export_diagrams.py)。</sub>
+
 ---
 
 ## 为什么要做这个
@@ -138,6 +146,18 @@ clock-to-Q 时序弧。
 `rtl/*.v`（设计意图）、`netlist/*.v`（门级网表，STA 真正的输入）、
 `sdc/*.sdc`（约束，注释很详细）。
 
+### 反例对照
+
+| `-setup 6 -hold 5`：正确 | `-setup 6` 单独写：保持违例 |
+|---|---|
+| ![正确的多周期约束](docs/images/waveform-multicycle.svg) | ![缺少 -hold 导致的保持违例](docs/images/waveform-hold-violation.svg) |
+
+左边（`ex9`）完全通过：建立 +57.475 ns，保持 +1.025 ns。
+
+右边（`ex9b`）唯一的改动就是去掉了 `-hold 5`。建立余量还是 +57.73 ns ——
+所以只跑 setup 的流程会认为这个设计是干净的 —— 但保持检查已经被拖到 50 ns 那个沿上，
+现在差了 **−49.23 ns**。这正是 `pysta` 想要暴露的那一类 bug。
+
 ---
 
 ## 设计要点
@@ -221,6 +241,15 @@ set_output_delay -max 4.5 -clock clkd -add_delay [get_ports B]
 pip install -e ".[dev]"
 pytest                      # 137 个测试
 pysta check                 # 32 条期望值核对
+```
+
+### 重新生成波形图
+
+`docs/images/` 里的 SVG 是生成的，不是手画的：
+
+```bash
+python tools/export_diagrams.py      # 5 张波形图 -> docs/images/*.svg
+python -m pysta run --out docs/demo  # 完整交互式报告 -> docs/demo/
 ```
 
 ### 可选：真实综合与仿真

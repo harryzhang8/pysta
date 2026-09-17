@@ -17,6 +17,18 @@ an afternoon, and every number it produces is reproducible by hand.
 
 > [中文文档 / Chinese README](README.zh-CN.md)
 
+**Live demo:** <https://harryzhang8.github.io/pysta/> — the interactive waveform
+report, rendered straight from `pysta run`. No install, no build step.
+
+---
+
+![Timing waveforms for ex6: one launch, two capture clocks](docs/images/waveform-multiclock.svg)
+
+<sub>`ex6_multi_clk_out` — `clkb` (10 ns) and `clkc` (40/3 ns) both capture the
+same launch. The worst-case pair is launch @ 20 ns → capture @ 26.667 ns, giving
++3.0567 ns. Every diagram in this README is drawn by the engine itself; see
+[`tools/export_diagrams.py`](tools/export_diagrams.py).</sub>
+
 ---
 
 ## Why
@@ -147,6 +159,19 @@ Each example ships with three files under `src/pysta/examples/`:
 `rtl/*.v` (behavioral intent), `netlist/*.v` (gate-level, what STA analyses) and
 `sdc/*.sdc` (constraints, heavily commented).
 
+### The counter-example, side by side
+
+| `-setup 6 -hold 5` → correct | `-setup 6` alone → hold violation |
+|---|---|
+| ![Correct multicycle constraint](docs/images/waveform-multicycle.svg) | ![Hold violation caused by a missing -hold](docs/images/waveform-hold-violation.svg) |
+
+The left diagram (`ex9`) passes cleanly: setup +57.475 ns, hold +1.025 ns.
+
+In the right diagram (`ex9b`) the only change is the missing `-hold 5`. Setup
+still passes by +57.73 ns — so a setup-only flow would call this design clean —
+but the hold check has been dragged to the 50 ns edge and now fails by
+**−49.23 ns**. That is precisely the class of bug `pysta` exists to make visible.
+
 ---
 
 ## Design notes
@@ -236,6 +261,15 @@ Do not use it to sign off a real design.
 pip install -e ".[dev]"
 pytest                      # 137 tests
 pysta check                 # 32 expectation checks
+```
+
+### Refreshing the diagrams
+
+The SVGs in `docs/images/` are generated, not hand-drawn:
+
+```bash
+python tools/export_diagrams.py    # 5 diagrams -> docs/images/*.svg
+python -m pysta run --out docs/demo  # full interactive report -> docs/demo/
 ```
 
 ### Optional: real synthesis and simulation

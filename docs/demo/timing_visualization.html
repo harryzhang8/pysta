@@ -1,0 +1,877 @@
+<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>pysta · 时序波形与 slack</title>
+<style>
+:root{
+  --bg:#f6f8fb; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+  --line:#e2e8f0; --accent:#2563eb; --ok:#16a34a; --bad:#dc2626; --warn:#d97706;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 20px 64px;background:var(--bg);color:var(--ink);
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+h2{font-size:18px;margin:0}
+.sub{color:var(--muted);font-size:13.5px;margin:0 0 26px;line-height:1.7}
+.sub code{background:#eef2f7;padding:1px 5px;border-radius:4px;font-size:12.5px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:20px 22px;margin-bottom:18px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.card>header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px}
+.tag{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;
+  background:#eef2ff;color:#4338ca;letter-spacing:.02em}
+.tag.ok{background:#dcfce7;color:#15803d}
+.tag.bad{background:#fee2e2;color:#b91c1c}
+.tag.warn{background:#fef3c7;color:#b45309}
+.desc{color:var(--muted);font-size:13px;line-height:1.65;flex-basis:100%;margin:0}
+.grid{display:grid;grid-template-columns:minmax(300px,1fr) minmax(380px,1.35fr);
+  gap:22px;align-items:start}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+pre{margin:0;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:14px 16px;
+  font-size:12.5px;line-height:1.7;overflow:auto;font-family:ui-monospace,Consolas,monospace;
+  max-height:330px}
+pre .c{color:#94a3b8}
+pre .k{color:#7dd3fc}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;
+  margin:14px 0 0;font-family:ui-monospace,Consolas,monospace}
+.kv dt{color:var(--muted);white-space:nowrap}
+.kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.kv dd.ok{color:var(--ok);font-weight:700}
+.kv dd.bad{color:var(--bad);font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px;
+  font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;
+  letter-spacing:.03em}
+tr:last-child td{border-bottom:none}
+td.ok{color:var(--ok);font-weight:700}
+td.bad{color:var(--bad);font-weight:700}
+td.mute{color:var(--muted)}
+.mono{font-family:ui-monospace,Consolas,monospace}
+svg.wave{display:block;width:100%;height:auto}
+.wavewrap{margin-top:18px;background:#fbfdff;border:1px solid var(--line);
+  border-radius:10px;padding:10px 14px 4px}
+.note{font-size:12.5px;color:var(--muted);line-height:1.7;margin-top:10px}
+.bar{height:9px;border-radius:5px;background:#e2e8f0;position:relative;
+  margin-top:6px;overflow:hidden}
+.bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+details{margin-top:14px}
+summary{cursor:pointer;font-size:13px;color:var(--accent);font-weight:600;
+  user-select:none}
+details pre{margin-top:10px}
+</style></head><body><div class='wrap'>
+<h1>pysta · 时序波形与 slack</h1>
+<p class='sub'>每个示例都由 <code>examples/</code> 下的工艺库、门级网表和 SDC 算出来：解析 Liberty 单元延时与 Tsu/Th/Tco，构建时序图，枚举路径，按发送沿/捕获沿关系算 slack。全部结果用 <code>fractions.Fraction</code> 精确计算，不依赖任何商业 EDA 工具。</p>
+<section class='card'><header><h2>总览：期望值 vs 实测值</h2>
+<span class='tag ok'>32/32 项吻合</span>
+</header><table><thead><tr><th>示例</th><th>约束</th><th>期望值</th><th>实测值</th><th>结论</th></tr></thead><tbody>
+<tr><td class='mono'>ex0_clk_attr</td><td>budget = Tclk - Tco - Tsu - uncertainty</td><td class='mono'>7.5ns</td><td class='mono'>7.5ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex1_reg2reg</td><td>TN &lt;= Tclk - Tco - Tsu - Tuncertainty</td><td class='mono'>8ns</td><td class='mono'>8ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex2_in2reg</td><td>budget = Tclk - input_delay - Tsu</td><td class='mono'>11.6ns</td><td class='mono'>11.6ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex3_reg2out</td><td>budget = Tclk - Tco - output_delay</td><td class='mono'>12.6ns</td><td class='mono'>12.6ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex4_in2out</td><td>budget = Tclk - input_delay - output_delay</td><td class='mono'>18.8ns</td><td class='mono'>18.8ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex5_multi_clk_in</td><td>最严格 budget = 10 - 5.5 - Tsu</td><td class='mono'>3.5ns</td><td class='mono'>3.5ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex5_multi_clk_in</td><td>最差发送沿落在第二个沿 30ns，而不是 0ns</td><td class='mono'>30ns</td><td class='mono'>30ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex5_multi_clk_in</td><td>对应的捕获沿落在 40ns</td><td class='mono'>40ns</td><td class='mono'>40ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex6_multi_clk_out</td><td>最严格 budget = 20/3 - 2.5 - Tco</td><td class='mono'>3.16667ns</td><td class='mono'>3.16667ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex6_multi_clk_out</td><td>clkc 周期 = 1.0/75*1000 = 40/3 ns（精确值）</td><td class='mono'>13.3333ns</td><td class='mono'>13.3333ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex6_multi_clk_out</td><td>最差发送沿是 20ns（不是 0ns）</td><td class='mono'>20ns</td><td class='mono'>20ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex6_multi_clk_out</td><td>最差捕获沿 26.667ns（即精确的 80/3 ns）</td><td class='mono'>26.6667ns</td><td class='mono'>26.6667ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex6_multi_clk_out</td><td>端口 B 的两条 output_delay 都保留了（-add_delay 生效）</td><td class='mono'>2</td><td class='mono'>2</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex7_async_cdc</td><td>被 set_false_path 屏蔽的跨时钟域路径条数</td><td class='mono'>2</td><td class='mono'>2</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex7_async_cdc</td><td>没有剩下未被屏蔽的 reg-&gt;reg 路径</td><td class='mono'>0</td><td class='mono'>0</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex7_async_cdc</td><td>时钟周期：clka = 20ns（50MHz）</td><td class='mono'>20ns</td><td class='mono'>20ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex7_async_cdc</td><td>时钟周期：clkb = 10ns（100MHz）</td><td class='mono'>10ns</td><td class='mono'>10ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex8_pseudo_path</td><td>被屏蔽的交叉伪路径条数</td><td class='mono'>2</td><td class='mono'>2</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex8_pseudo_path</td><td>仍参与时序检查的真实通路条数</td><td class='mono'>2</td><td class='mono'>2</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex8_pseudo_path</td><td>真实通路 budget = Tclk - input_delay - output_delay</td><td class='mono'>5ns</td><td class='mono'>5ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9_multicycle_adder</td><td>budget = 6*Tclk - Tco - Tsu</td><td class='mono'>58ns</td><td class='mono'>58ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9_multicycle_adder</td><td>建立捕获沿落在第 6 个上升沿 60ns</td><td class='mono'>60ns</td><td class='mono'>60ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9_multicycle_adder</td><td>保持检查沿被 -hold 5 拉回 0ns</td><td class='mono'>0ns</td><td class='mono'>0ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9_multicycle_adder</td><td>多周期数 setup/hold</td><td class='mono'>6/5</td><td class='mono'>6/5</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9_multicycle_adder</td><td>保持裕量为正（约束合理）</td><td class='mono'>是</td><td class='mono'>是</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9b_multicycle_adder_default_hold</td><td>保持检查沿停在 50ns（建立沿的前一个沿）</td><td class='mono'>50ns</td><td class='mono'>50ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9b_multicycle_adder_default_hold</td><td>保持违例严重（证明这条约束是错的）</td><td class='mono'>是</td><td class='mono'>是</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex9b_multicycle_adder_default_hold</td><td>建立 budget 本身没问题，仍是 58ns</td><td class='mono'>58ns</td><td class='mono'>58ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex10_multicycle_mixed</td><td>乘法路径被识别为 setup=2 / hold=1</td><td class='mono'>2/1</td><td class='mono'>2/1</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex10_multicycle_mixed</td><td>乘法路径 budget = 20 - Tco - Tsu</td><td class='mono'>17.9ns</td><td class='mono'>17.9ns</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex10_multicycle_mixed</td><td>异或路径仍是默认的 setup=1 / hold=0</td><td class='mono'>1/0</td><td class='mono'>1/0</td><td class='ok'>✓</td></tr>
+<tr><td class='mono'>ex10_multicycle_mixed</td><td>异或路径 budget = 10 - Tco - Tsu</td><td class='mono'>7.9ns</td><td class='mono'>7.9ns</td><td class='ok'>✓</td></tr>
+</tbody></table></section>
+<section class="card" id="ex0_clk_attr--0">
+<header>
+<h2>时钟属性：不确定度 / 转换时间 / 延时</h2>
+<span class="tag">ex0_clk_attr</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：时钟建模</span>
+<p class="desc">skew 与 jitter 统一用 set_clock_uncertainty 建模；转换时间用 set_clock_transition；延时拆成 source latency 与 network latency 分开约束，布线后改用 set_propagated_clock。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 0：时钟属性的约束写法</span>
+<span class="c">#</span>
+<span class="c"># 【时钟不确定度】skew 与 jitter 都归到 uncertainty 里建模：</span>
+<span class="c">#     set_clock_uncertainty -setup 0.5 [get_clocks clk]</span>
+<span class="c">#   不加 -setup / -hold 时，建立和保持会用同一个值；</span>
+<span class="c">#   也可以分别给上升/下降沿：</span>
+<span class="c">#     set_clock_uncertainty -rise 0.2 -fall 0.5 [get_clocks clk]</span>
+<span class="c">#</span>
+<span class="c"># 【时钟转换时间】一般只约束最大值：</span>
+<span class="c">#     set_clock_transition -max 0.2 [get_clocks clk]</span>
+<span class="c">#</span>
+<span class="c"># 【时钟延时】分成两段：</span>
+<span class="c">#     源延迟 source latency：时钟源 -&gt; 芯片时钟引脚（工具无法自己知道）</span>
+<span class="c">#     网络延迟 network latency：芯片时钟引脚 -&gt; 寄存器 CP（布线后才能算）</span>
+<span class="c">#   布线前：</span>
+<span class="c">#     set_clock_latency -source -max 3 [get_clocks clk]</span>
+<span class="c">#     set_clock_latency 1 [get_clocks clk]</span>
+<span class="c">#   布线后，网络延迟由实际时钟树得出，用下面这条取代上面第二条：</span>
+<span class="c">#     set_propagated_clock [get_clocks clk]</span>
+<span class="c">#</span>
+<span class="c">#   两者要分开约束的原因：source latency 是工具算不出来的、必须人为给定的；</span>
+<span class="c">#   而 network latency 只有在布局布线之后才有真实值。布线后再去人为约束网络</span>
+<span class="c">#   延迟反而会掩盖时钟树的真实情况。</span>
+<span class="c">#</span>
+<span class="c"># 本例效果（budget = Tclk - Tco - Tsu - uncertainty）：</span>
+<span class="c">#     不设 uncertainty              -&gt; 10 - 1.0 - 1.0       = 8.0ns</span>
+<span class="c">#     设 set_clock_uncertainty 0.5 -&gt; 10 - 1.0 - 1.0 - 0.5 = 7.5ns</span>
+<span class="c">#   source latency 发送端/捕获端共有，会相互抵消，不影响 slack。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 10 [get_ports clk]
+
+set_clock_uncertainty <span class="k">-setup</span> 0.5 [get_clocks clk]
+set_clock_transition  <span class="k">-max</span> 0.2 [get_clocks clk]
+
+set_clock_latency <span class="k">-source</span> <span class="k">-max</span> 3 [get_clocks clk]
+set_clock_latency 1 [get_clocks clk]
+
+<span class="c"># 分别给上升沿/下降沿建模不确定度（会覆盖上面的 -setup 值）：</span>
+<span class="c"># set_clock_uncertainty -rise 0.2 -fall 0.5 [get_clocks clk]</span>
+
+<span class="c"># 布局布线之后，网络延迟由实际时钟树计算，取代 set_clock_latency：</span>
+<span class="c"># set_propagated_clock [get_clocks clk]</span></pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">FF2/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 10.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">0.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.060ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">5.060ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">12.500ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">7.500ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+7.4400ns</dd>
+<dt>slack (hold)</dt><dd class="ok" style="">+0.5600ns</dd>
+</dl>
+<p class="note">uncertainty 会直接从预算里扣掉；source latency 发送端与捕获端共有，会相互抵消，不影响 slack。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 430.95,52.00 430.95,76.00 807.90,76.00 807.90,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#dc2626"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 0ns</text><line x1="54.00" y1="40.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="34.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="807.90" y1="22.00" x2="807.90" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="807.90" y1="50.00" x2="807.90" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="807.90" cy="78.00" r="3.2" fill="#7c3aed"/><text x="807.90" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 10ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="242.47" y1="196.00" x2="242.47" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="242.47" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">2.5</text><line x1="430.95" y1="196.00" x2="430.95" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="430.95" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">5</text><line x1="619.42" y1="196.00" x2="619.42" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="619.42" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">7.5</text><line x1="807.90" y1="196.00" x2="807.90" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="807.90" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="996.37" y1="196.00" x2="996.37" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="996.37" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">12.5</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="75.39" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="129.39" y="115.00" width="306.08" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="91.69" y="128.00" font-size="9.5" text-anchor="middle" fill="#9a3412" font-weight="400" font-family="ui-monospace, Consolas, monospace">Tco</text><text x="282.43" y="128.00" font-size="9.5" text-anchor="middle" fill="#1e3a8a" font-weight="400" font-family="ui-monospace, Consolas, monospace">组合 0.06</text><text x="435.47" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 5.060</text><line x1="996.37" y1="110.00" x2="996.37" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="996.37" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 12.500</text><line x1="435.47" y1="168.00" x2="996.37" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="435.47" y1="164.00" x2="435.47" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="996.37" y1="164.00" x2="996.37" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="715.92" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +7.4400ns   （预算 7.5000）</text></svg>
+</div>
+<p class="note">另有 2 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">d → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF2/D</td><td>0.0600</td><td>7.5000</td><td class='ok'>+7.4400</td><td class='ok'>+0.5600</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>d</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF2/CP</td><td class='mono'>q</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex1_reg2reg--1">
+<header>
+<h2>寄存器 CP -&gt; 寄存器 D</h2>
+<span class="tag">ex1_reg2reg</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：寄存器到寄存器</span>
+<p class="desc">只要 create_clock 定义了时钟，寄存器之间的路径就自动被约束，不需要任何额外约束。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 1：寄存器 -&gt; 寄存器</span>
+<span class="c">#</span>
+<span class="c"># 时钟周期 10ns，只需要一条 create_clock ——</span>
+<span class="c"># 寄存器之间的路径“一旦时钟定义好”就自动被约束了，不用额外写约束。</span>
+<span class="c">#</span>
+<span class="c"># 算出来的 budget = Tclk - Tco - Tsu - uncertainty = 10 - 1.0 - 1.0 = 8.0ns</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 10 [get_ports clk]</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">FF2/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 10.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">0.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.135ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">1.135ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">9.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">8.000ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+7.8650ns</dd>
+<dt>slack (hold)</dt><dd class="ok" style="">+0.6350ns</dd>
+</dl>
+<p class="note">TN <= Tclk - Tco - Tsu - Tuncertainty，Tclk=10ns 时预算为 8.0ns。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 465.85,52.00 465.85,76.00 877.70,76.00 877.70,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#dc2626"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 0ns</text><line x1="54.00" y1="40.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="34.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="877.70" y1="22.00" x2="877.70" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="877.70" y1="50.00" x2="877.70" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="877.70" cy="78.00" r="3.2" fill="#7c3aed"/><text x="877.70" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 10ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="218.74" y1="196.00" x2="218.74" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="218.74" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">2</text><line x1="383.48" y1="196.00" x2="383.48" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="383.48" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">4</text><line x1="548.22" y1="196.00" x2="548.22" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="548.22" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">6</text><line x1="712.96" y1="196.00" x2="712.96" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="712.96" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">8</text><line x1="877.70" y1="196.00" x2="877.70" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="877.70" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="1042.44" y1="196.00" x2="1042.44" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1042.44" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">12</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="82.37" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="136.37" y="115.00" width="11.12" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="95.19" y="128.00" font-size="9.5" text-anchor="middle" fill="#9a3412" font-weight="400" font-family="ui-monospace, Consolas, monospace">Tco</text><text x="147.49" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 1.135</text><line x1="795.33" y1="110.00" x2="795.33" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="795.33" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 9.000</text><line x1="147.49" y1="168.00" x2="795.33" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="147.49" y1="164.00" x2="147.49" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="795.33" y1="164.00" x2="795.33" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="471.41" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +7.8650ns   （预算 8.0000）</text></svg>
+</div>
+<p class="note">另有 3 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">dina → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF2/D</td><td>0.1350</td><td>8.0000</td><td class='ok'>+7.8650</td><td class='ok'>+0.6350</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>dina</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>dina</td><td class='mono'>FF2/D</td><td>0.0800</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF2/CP</td><td class='mono'>douta</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex2_in2reg--2">
+<header>
+<h2>输入端口 -&gt; 寄存器 D</h2>
+<span class="tag">ex2_in2reg</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：输入延时约束</span>
+<p class="desc">芯片外部已经占掉了一部分周期，必须用 set_input_delay 把这部分告诉综合 / 时序工具，否则内部逻辑的预算会被算错。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 2：输入端口 -&gt; 寄存器的 D 端口</span>
+<span class="c">#</span>
+<span class="c"># 时钟周期 20ns。芯片外部已经占掉 7.4ns（包含上游寄存器的 Tco、外部组合逻辑</span>
+<span class="c"># 和线网延时），触发器建立时间 1ns，于是内部逻辑只剩下：</span>
+<span class="c">#</span>
+<span class="c">#     budget = Tclk - input_delay - Tsu - uncertainty</span>
+<span class="c">#            = 20 - 7.4 - 1.0 - 0 = 11.6ns</span>
+<span class="c">#</span>
+<span class="c"># set_input_delay 就是把这些“工具看不到的外部时间”告诉工具的方式。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 20 [get_ports clk]
+set_input_delay <span class="k">-max</span> 7.4 <span class="k">-clock</span> clk [get_ports A]</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">input-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">A</dd>
+<dt>终点</dt><dd class="" style="">FF2/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 20.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">0.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">0.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.230ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">7.630ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">19.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">11.600ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+11.3700ns</dd>
+<dt>slack (hold)</dt><dd class="ok" style="">+7.1300ns</dd>
+</dl>
+<p class="note">内部逻辑最大延时 = 20 - 7.4 - 1 = 11.6ns</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 465.85,52.00 465.85,76.00 877.70,76.00 877.70,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#dc2626"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 0ns</text><line x1="54.00" y1="40.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="34.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="877.70" y1="22.00" x2="877.70" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="877.70" y1="50.00" x2="877.70" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="877.70" cy="78.00" r="3.2" fill="#7c3aed"/><text x="877.70" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 20ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="259.93" y1="196.00" x2="259.93" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="259.93" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">5</text><line x1="465.85" y1="196.00" x2="465.85" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="465.85" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="671.78" y1="196.00" x2="671.78" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="671.78" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">15</text><line x1="877.70" y1="196.00" x2="877.70" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="877.70" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="1083.63" y1="196.00" x2="1083.63" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1083.63" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">25</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="0.00" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="54.00" y="115.00" width="314.24" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="211.12" y="128.00" font-size="9.5" text-anchor="middle" fill="#1e3a8a" font-weight="400" font-family="ui-monospace, Consolas, monospace">组合 0.23</text><text x="368.24" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 7.630</text><line x1="836.52" y1="110.00" x2="836.52" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="836.52" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 19.000</text><line x1="368.24" y1="168.00" x2="836.52" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="368.24" y1="164.00" x2="368.24" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="836.52" y1="164.00" x2="836.52" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="602.38" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +11.3700ns   （预算 11.6000）</text></svg>
+</div>
+<p class="note">另有 1 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">FF2/CP → Q2</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>input-&gt;reg</td><td class='mono'>A</td><td class='mono'>FF2/D</td><td>0.2300</td><td>11.6000</td><td class='ok'>+11.3700</td><td class='ok'>+7.1300</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>A</td><td class='mono'>FF2/D</td><td>0.2250</td><td>11.6000</td><td class='ok'>+11.3750</td><td class='ok'>+7.1250</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>A</td><td class='mono'>FF2/D</td><td>0.0950</td><td>11.6000</td><td class='ok'>+11.5050</td><td class='ok'>+6.9950</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF2/CP</td><td class='mono'>Q2</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex3_reg2out--3">
+<header>
+<h2>寄存器 CP -&gt; 输出端口</h2>
+<span class="tag">ex3_reg2out</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：输出延时约束</span>
+<p class="desc">用 set_output_delay 把芯片外部那一段（组合逻辑 + 下游寄存器的建立时间）一起告诉工具。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 3：寄存器的 CP 端口 -&gt; 输出端口</span>
+<span class="c">#</span>
+<span class="c"># 时钟周期 20ns。芯片外部那一段是 5.4ns，下游寄存器建立时间 1ns，</span>
+<span class="c"># 本设计里末级寄存器的 Tco 是 1ns，于是要综合的组合逻辑只剩下：</span>
+<span class="c">#</span>
+<span class="c">#     budget = Tclk - Tco - output_delay - uncertainty</span>
+<span class="c">#            = 20 - 1.0 - 6.4 - 0 = 12.6ns</span>
+<span class="c">#</span>
+<span class="c"># 注意 set_output_delay 的 6.4 是由两部分拼起来的：</span>
+<span class="c">#     外部组合逻辑 5.4 + 下游寄存器的 Tsu 1.0</span>
+<span class="c"># 也就是说，工具看不到的下游建立时间，也要一起算进 output_delay 里。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 20 [get_ports clk]
+set_output_delay <span class="k">-max</span> 6.4 <span class="k">-clock</span> clk [get_ports B]</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;output</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">B</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 20.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.110ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">1.110ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">13.600ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">12.600ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+12.4900ns</dd>
+</dl>
+<p class="note">逻辑最大延时 = 20 - 5.4 - 1 - 1 = 12.6ns（output_delay 6.4 = 外部组合 5.4 + 下游 Tsu 1.0）</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 465.85,52.00 465.85,76.00 877.70,76.00 877.70,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="877.70" y1="22.00" x2="877.70" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="877.70" y1="50.00" x2="877.70" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="877.70" cy="78.00" r="3.2" fill="#7c3aed"/><text x="877.70" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 20ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="259.93" y1="196.00" x2="259.93" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="259.93" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">5</text><line x1="465.85" y1="196.00" x2="465.85" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="465.85" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="671.78" y1="196.00" x2="671.78" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="671.78" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">15</text><line x1="877.70" y1="196.00" x2="877.70" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="877.70" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="1083.63" y1="196.00" x2="1083.63" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1083.63" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">25</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="41.19" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="95.19" y="115.00" width="4.53" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="74.59" y="128.00" font-size="9.5" text-anchor="middle" fill="#9a3412" font-weight="400" font-family="ui-monospace, Consolas, monospace">Tco</text><text x="99.72" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 1.110</text><line x1="614.12" y1="110.00" x2="614.12" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="614.12" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 13.600</text><line x1="99.72" y1="168.00" x2="614.12" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="99.72" y1="164.00" x2="99.72" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="614.12" y1="164.00" x2="614.12" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="356.92" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +12.4900ns   （预算 12.6000）</text></svg>
+</div>
+<p class="note">另有 1 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">D1 → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;output</td><td class='mono'>FF1/CP</td><td class='mono'>B</td><td>0.1100</td><td>12.6000</td><td class='ok'>+12.4900</td><td class=''>-</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>D1</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex4_in2out--4">
+<header>
+<h2>输入端口 -&gt; 输出端口（纯组合）</h2>
+<span class="tag">ex4_in2out</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：纯组合路径</span>
+<p class="desc">中间没有寄存器，靠两端的 input/output delay 把组合逻辑夹住；也可以直接用 set_max_delay 卡这条路径的延时。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 4：输入端口 -&gt; 输出端口（纯组合逻辑路径）</span>
+<span class="c">#</span>
+<span class="c"># 中间没有寄存器，时钟跟这条路径没关系。约束的方法是：</span>
+<span class="c"># 用输入端的 input_delay 和输出端的 output_delay，从两边把中间夹出来。</span>
+<span class="c">#</span>
+<span class="c">#     budget = Tclk - input_delay - output_delay</span>
+<span class="c">#            = 20 - 0.4 - 0.8 = 18.8ns</span>
+<span class="c">#</span>
+<span class="c"># 另一种写法是直接限制“端口到端口”的延时（文件未尾注释的那条）：</span>
+<span class="c">#     set_max_delay 1.2 -from [get_ports C] -to [get_ports D]</span>
+<span class="c"># 它会直接卡死这条路径的延时（budget 就变成 1.2ns），和上面两条的效果不同：</span>
+<span class="c"># input/output delay 描述的是“两端各占了多少”，set_max_delay 描述的是“中间这段必须多快”。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 20 [get_ports clk]
+
+set_input_delay  0.4 <span class="k">-clock</span> clk <span class="k">-add_delay</span> [get_ports C]
+set_output_delay 0.8 <span class="k">-clock</span> clk <span class="k">-add_delay</span> [get_ports D]
+
+<span class="c"># 另一种等价写法：直接限制 C -&gt; D 的组合逻辑延时</span>
+<span class="c"># set_max_delay 1.2 -from [get_ports C] -to [get_ports D]</span></pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">input-&gt;output</dd>
+<dt>起点</dt><dd class="" style="">C</dd>
+<dt>终点</dt><dd class="" style="">D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 20.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">0.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.240ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">0.640ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">19.200ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">18.800ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+18.5600ns</dd>
+</dl>
+<p class="note">Tm = Tclk - input_delay - output_delay = 20 - 0.4 - 0.8 = 18.8ns</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 465.85,52.00 465.85,76.00 877.70,76.00 877.70,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="877.70" y1="22.00" x2="877.70" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="877.70" y1="50.00" x2="877.70" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="877.70" cy="78.00" r="3.2" fill="#7c3aed"/><text x="877.70" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 20ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="259.93" y1="196.00" x2="259.93" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="259.93" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">5</text><line x1="465.85" y1="196.00" x2="465.85" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="465.85" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="671.78" y1="196.00" x2="671.78" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="671.78" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">15</text><line x1="877.70" y1="196.00" x2="877.70" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="877.70" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="1083.63" y1="196.00" x2="1083.63" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1083.63" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">25</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="0.00" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="54.00" y="115.00" width="26.36" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="80.36" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 0.640</text><line x1="844.76" y1="110.00" x2="844.76" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="844.76" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 19.200</text><line x1="80.36" y1="168.00" x2="844.76" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="80.36" y1="164.00" x2="80.36" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="844.76" y1="164.00" x2="844.76" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="462.56" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +18.5600ns   （预算 18.8000）</text></svg>
+</div>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>input-&gt;output</td><td class='mono'>C</td><td class='mono'>D</td><td>0.2400</td><td>18.8000</td><td class='ok'>+18.5600</td><td class=''>-</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>C</td><td class='mono'>D</td><td>0.1850</td><td>18.8000</td><td class='ok'>+18.6150</td><td class=''>-</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>C</td><td class='mono'>D</td><td>0.0650</td><td>18.8000</td><td class='ok'>+18.7350</td><td class=''>-</td><td class='ok'>MET</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex5_multi_clk_in--5">
+<header>
+<h2>多时钟：输入端口</h2>
+<span class="tag">ex5_multi_clk_in</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：虚拟时钟与公共基本周期</span>
+<p class="desc">发送时钟用虚拟时钟定义。公共基本周期 = LCM(30,20) = 60ns，工具要遍历 0ns 和 30ns 两个发送沿，取最严格的那个。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 5：多时钟 —— 输入端口</span>
+<span class="c">#</span>
+<span class="c"># 本设计内部只有 clkb（有实体端口），上游用的是 clka。</span>
+<span class="c"># clka 在本设计里没有对应端口，所以要用**虚拟时钟**来定义：</span>
+<span class="c">#     create_clock -name clka -period 30</span>
+<span class="c"># 虚拟时钟必须给 -name，因为它没有源端口可供命名。</span>
+<span class="c">#</span>
+<span class="c"># 公共基本周期 = LCM(30, 20) = 60ns。工具会在一个基本周期里遍历史所有发送沿：</span>
+<span class="c">#     发送沿 0ns  -&gt; 捕获沿 20ns ：留给输入逻辑 20 - 5.5 - Tsu</span>
+<span class="c">#     发送沿 30ns -&gt; 捕获沿 40ns ：留给输入逻辑 10 - 5.5 - Tsu   &lt;-- 最严格</span>
+<span class="c"># 两条必须同时满足，取最严格的那条：</span>
+<span class="c">#     budget = 10 - 5.5 - 1.0 = 3.5ns</span>
+<span class="c">#</span>
+<span class="c"># 这就是“只看周期相减”会算错的地方 —— 必须同时看两个时钟的相位关系。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 30 <span class="k">-name</span> clka
+create_clock <span class="k">-period</span> 20 [get_ports clkb]
+
+set_input_delay <span class="k">-max</span> 5.5 <span class="k">-clock</span> clka [get_ports A]</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">input-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">A</dd>
+<dt>终点</dt><dd class="" style="">FF2/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">30.000ns / 40.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">0.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">0.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.135ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">35.635ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">39.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">3.500ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+3.3650ns</dd>
+<dt>slack (hold)</dt><dd class="ok" style="">+5.1350ns</dd>
+</dl>
+<p class="note">发送沿 0ns -> 捕获沿 20ns：预算 20-5.5-Tsu；发送沿 30ns -> 捕获沿 40ns：预算 10-5.5-Tsu。取最严格 ⇒ 3.5ns</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 268" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clka</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 407.39,52.00 407.39,76.00 760.78,76.00 760.78,52.00 1114.17,52.00 1114.17,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><text x="8.00" y="112.00" font-size="11" text-anchor="start" fill="#7c3aed" font-weight="600" font-family="ui-monospace, Consolas, monospace">clkb</text><polyline points="54.00,118.00 54.00,118.00 54.00,94.00 289.59,94.00 289.59,118.00 525.19,118.00 525.19,94.00 760.78,94.00 760.78,118.00 996.37,118.00 996.37,94.00 1166.00,94.00 1166.00,118.00 1166.00,118.00" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="238.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="92.00" x2="54.00" y2="120.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="120.00" r="3.2" fill="#dc2626"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 0ns</text><line x1="760.78" y1="22.00" x2="760.78" y2="238.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="760.78" y1="50.00" x2="760.78" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="760.78" cy="78.00" r="3.2" fill="#0284c7"/><text x="760.78" y="16.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 30ns</text><line x1="996.37" y1="22.00" x2="996.37" y2="238.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="996.37" y1="92.00" x2="996.37" y2="120.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="996.37" cy="120.00" r="3.2" fill="#7c3aed"/><text x="996.37" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 40ns</text><line x1="54.00" y1="238.00" x2="1166.00" y2="238.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="238.00" x2="54.00" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="289.59" y1="238.00" x2="289.59" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="289.59" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="525.19" y1="238.00" x2="525.19" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="525.19" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="760.78" y1="238.00" x2="760.78" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="760.78" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">30</text><line x1="996.37" y1="238.00" x2="996.37" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="996.37" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">40</text><text x="10.00" y="170.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="760.78" y="157.00" width="0.00" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="760.78" y="157.00" width="132.76" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="827.16" y="170.00" font-size="9.5" text-anchor="middle" fill="#1e3a8a" font-weight="400" font-family="ui-monospace, Consolas, monospace">组合 0.14</text><text x="893.54" y="152.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 35.635</text><line x1="972.81" y1="152.00" x2="972.81" y2="180.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="972.81" y="193.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 39.000</text><line x1="893.54" y1="210.00" x2="972.81" y2="210.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="893.54" y1="206.00" x2="893.54" y2="214.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="972.81" y1="206.00" x2="972.81" y2="214.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="933.17" y="202.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +3.3650ns   （预算 3.5000）</text></svg>
+</div>
+<p class="note">另有 1 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">FF2/CP → Q</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>input-&gt;reg</td><td class='mono'>A</td><td class='mono'>FF2/D</td><td>0.1350</td><td>3.5000</td><td class='ok'>+3.3650</td><td class='ok'>+5.1350</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF2/CP</td><td class='mono'>Q</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex6_multi_clk_out--6">
+<header>
+<h2>多时钟：输出端口与 -add_delay</h2>
+<span class="tag">ex6_multi_clk_out</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：多捕获时钟取最差</span>
+<p class="desc">clkc 的周期写成 [expr 1.0/75*1000]（精确值 40/3 ns）。同一个端口上挂两条 set_output_delay，第二条必须加 -add_delay，否则会把第一条覆盖掉。每条约束要分别算再取最严格。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 6：多时钟 —— 输出端口与 -add_delay</span>
+<span class="c">#</span>
+<span class="c"># clkb 是本设计唯一的真实时钟；clkc / clkd 是下游两个接收时钟，</span>
+<span class="c"># 没有实体端口，所以要建成虚拟时钟。</span>
+<span class="c">#</span>
+<span class="c"># 【-add_delay 的语义】同一个端口上挂多条同类约束时，</span>
+<span class="c"># 第二条必须加 -add_delay，否则会把第一条**覆盖掉**：</span>
+<span class="c">#     set_output_delay -max 2.5 -clock clkc             [get_ports B]</span>
+<span class="c">#     set_output_delay -max 4.5 -clock clkd -add_delay  [get_ports B]   &lt;- 保留第一条</span>
+<span class="c">#</span>
+<span class="c"># 【Tcl 整数除法】clkc = 300MHz/4 = 75MHz，周期要用实数才能算对：</span>
+<span class="c">#     [expr 1/75*1000]   -&gt; 0          （整数除法，先算 1/75 = 0）</span>
+<span class="c">#     [expr 1.0/75*1000] -&gt; 13.33333   （实数运算，精确值 40/3 ns）</span>
+<span class="c"># 本工具严格实现了这个语义，所以下面这条能拿到正确的 40/3 ns。</span>
+<span class="c">#</span>
+<span class="c"># 公共基本周期 = LCM(20, 40/3, 10) = 40ns，遍历后取最严格：</span>
+<span class="c">#     对 clkc：发送沿 0ns  -&gt; 捕获沿 40/3 = 13.333ns：预算 13.333 - 2.5 - 1.0 = 9.833</span>
+<span class="c">#              发送沿 20ns -&gt; 捕获沿 80/3 = 26.667ns：预算  6.667 - 2.5 - 1.0 = 3.167  &lt;-- 最严格</span>
+<span class="c">#     对 clkd：发送沿 0ns  -&gt; 捕获沿 10ns           ：预算 10    - 4.5 - 1.0 = 4.5</span>
+<span class="c"># 最终 budget = 3.1667ns。</span>
+<span class="c">#</span>
+<span class="c"># 注意：最严格的是 -max 数值**更小**的 clkc 那条，不是 4.5 的 clkd 那条。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> [expr 1.0/75*1000] <span class="k">-name</span> clkc
+create_clock <span class="k">-period</span> 10 <span class="k">-name</span> clkd
+create_clock <span class="k">-period</span> 20 [get_ports clkb]
+
+set_output_delay <span class="k">-max</span> 2.5 <span class="k">-clock</span> clkc [get_ports B]
+set_output_delay <span class="k">-max</span> 4.5 <span class="k">-clock</span> clkd <span class="k">-add_delay</span> [get_ports B]</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;output</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">B</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">20.000ns / 26.667ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.110ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">21.110ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">24.167ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">3.167ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+3.0567ns</dd>
+</dl>
+<p class="note">对 clkd 是 10-4.5-Tco，对 clkc 是 20/3-2.5-Tco，取最严格 ⇒ 预算 3.1667ns</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 268" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clkb</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 407.39,52.00 407.39,76.00 760.78,76.00 760.78,52.00 1114.17,52.00 1114.17,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><text x="8.00" y="112.00" font-size="11" text-anchor="start" fill="#7c3aed" font-weight="600" font-family="ui-monospace, Consolas, monospace">clkc</text><polyline points="54.00,118.00 54.00,118.00 54.00,94.00 289.59,94.00 289.59,118.00 525.19,118.00 525.19,94.00 760.78,94.00 760.78,118.00 996.37,118.00 996.37,94.00 1166.00,94.00 1166.00,118.00 1166.00,118.00" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-linejoin="round"/><line x1="760.78" y1="22.00" x2="760.78" y2="238.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="760.78" y1="50.00" x2="760.78" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="760.78" cy="78.00" r="3.2" fill="#0284c7"/><text x="760.78" y="16.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 20ns</text><line x1="996.37" y1="22.00" x2="996.37" y2="238.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="996.37" y1="92.00" x2="996.37" y2="120.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="996.37" cy="120.00" r="3.2" fill="#7c3aed"/><text x="996.37" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 26.6667ns</text><line x1="54.00" y1="238.00" x2="1166.00" y2="238.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="238.00" x2="54.00" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="230.69" y1="238.00" x2="230.69" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="230.69" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">5</text><line x1="407.39" y1="238.00" x2="407.39" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="407.39" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="584.08" y1="238.00" x2="584.08" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="584.08" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">15</text><line x1="760.78" y1="238.00" x2="760.78" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="760.78" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="937.47" y1="238.00" x2="937.47" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="937.47" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">25</text><line x1="1114.17" y1="238.00" x2="1114.17" y2="242.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1114.17" y="254.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">30</text><text x="10.00" y="170.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="760.78" y="157.00" width="35.34" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="796.12" y="157.00" width="3.89" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="778.45" y="170.00" font-size="9.5" text-anchor="middle" fill="#9a3412" font-weight="400" font-family="ui-monospace, Consolas, monospace">Tco</text><text x="800.01" y="152.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 21.110</text><line x1="908.03" y1="152.00" x2="908.03" y2="180.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="908.03" y="193.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 24.167</text><line x1="800.01" y1="210.00" x2="908.03" y2="210.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="800.01" y1="206.00" x2="800.01" y2="214.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="908.03" y1="206.00" x2="908.03" y2="214.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="854.02" y="202.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +3.0567ns   （预算 3.1667）</text></svg>
+</div>
+<p class="note">另有 1 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">D1 → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;output</td><td class='mono'>FF1/CP</td><td class='mono'>B</td><td>0.1100</td><td>3.1667</td><td class='ok'>+3.0567</td><td class=''>-</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>D1</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex7_async_cdc--7">
+<header>
+<h2>时序例外：异步路径</h2>
+<span class="tag">ex7_async_cdc</span>
+<span class="tag warn">无已约束路径</span>
+<span class="tag">主题：set_false_path</span>
+<p class="desc">两个时钟来自独立时钟源，相位关系不确定，跨时钟域路径用 set_false_path 解除约束 —— 相位不确定的路径做时序分析没有意义。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 7：时序例外 —— 异步路径</span>
+<span class="c">#</span>
+<span class="c"># clka（50MHz）和 clkb（100MHz）来自两个独立时钟源，它们之间的相位关系</span>
+<span class="c"># 不确定且持续变化，所以跨域路径不应该做时序分析 —— 分析结果没有意义，</span>
+<span class="c"># 还会白白占掉工具的优化资源。用 set_false_path 把它们排除掉：</span>
+<span class="c">#</span>
+<span class="c">#     set_false_path -from [get_clocks clka] -to [get_clocks clkb]</span>
+<span class="c">#     set_false_path -from [get_clocks clkb] -to [get_clocks clka]</span>
+<span class="c">#</span>
+<span class="c"># 两个方向都要写 —— set_false_path 的 -from/-to 是有方向的。</span>
+<span class="c">#</span>
+<span class="c"># 下面注释的那一条与上面两条等价，一条顶两条：</span>
+<span class="c">#     set_clock_groups -asynchronous -group [get_clocks clka] -group [get_clocks clkb]</span>
+<span class="c"># （注意命令名是复数 set_clock_groups）</span>
+<span class="c">#</span>
+<span class="c"># 运行效果：两条跨时钟域路径被标为 EXCLUDED；</span>
+<span class="c">#           域内的同源路径不受影响。</span>
+<span class="c">#</span>
+<span class="c"># 提醒：false_path 只是让工具别去优化它，并不代表电路安全 ——</span>
+<span class="c">#       真实设计里跨时钟域还需要同步器或握手逻辑。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 20 [get_ports clka]
+create_clock <span class="k">-period</span> 10 [get_ports clkb]
+
+set_false_path <span class="k">-from</span> [get_clocks clka] <span class="k">-to</span> [get_clocks clkb]
+set_false_path <span class="k">-from</span> [get_clocks clkb] <span class="k">-to</span> [get_clocks clka]
+
+<span class="c"># set_clock_groups -asynchronous -group [get_clocks clka] -group [get_clocks clkb]</span></pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">input-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">DA</dd>
+<dt>终点</dt><dd class="" style="">FF_A1/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / -ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">0.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.000ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">0.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">-ns</dd>
+</dl>
+<p class="note">两个方向的共 2 条跨时钟域路径都被屏蔽。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 60" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><rect x="8.00" y="14.00" width="1164.00" height="34.00" rx="3" fill="#f1f5f9" stroke="none" opacity="1.0"/><text x="590.00" y="36.00" font-size="12" text-anchor="middle" fill="#64748b" font-weight="400" font-family="ui-monospace, Consolas, monospace">输入端口没有 set_input_delay，路径未约束</text></svg>
+</div>
+<p class="note">另有 4 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">DA → FF_A1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>input-&gt;reg</td><td class='mono'>DA</td><td class='mono'>FF_A1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>DB</td><td class='mono'>FF_B1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF_A1/CP</td><td class='mono'>FF_B2/D</td><td>0.0600</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>EXCLUDED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF_A2/CP</td><td class='mono'>QA</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF_B1/CP</td><td class='mono'>FF_A2/D</td><td>0.0750</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>EXCLUDED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF_B2/CP</td><td class='mono'>QB</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex8_pseudo_path--8">
+<header>
+<h2>时序例外：逻辑伪路径</h2>
+<span class="tag">ex8_pseudo_path</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：-through 匹配</span>
+<p class="desc">两个共用选择信号的 MUX 串接，交叉通路物理上连着、逻辑上不通。set_false_path 的多个 -through 之间是「且」的关系。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 8：时序例外 —— 逻辑伪路径</span>
+<span class="c">#</span>
+<span class="c"># 两个 MUX 共用同一个选择信号，交叉通路永远不会导通，</span>
+<span class="c"># 但它们在网表里确实连着 —— 不做约束的话工具有可能去优化这两条假路径。</span>
+<span class="c">#</span>
+<span class="c"># 三个筛选参数的语义：</span>
+<span class="c">#     -from     起始点</span>
+<span class="c">#     -through  路径必须穿过这个点（写多次时是「且」的关系，且有顺序要求）</span>
+<span class="c">#     -to       终点</span>
+<span class="c">#</span>
+<span class="c"># 所以下面两条分别排除两种交叉通路：</span>
+<span class="c">#     set_false_path -from [get_ports A] -through [get_pins MUX0/I0] -through [get_pins MUX1/I1] -to [get_ports B]</span>
+<span class="c">#     set_false_path -from [get_ports A] -through [get_pins MUX0/I1] -through [get_pins MUX1/I0] -to [get_ports B]</span>
+<span class="c">#</span>
+<span class="c"># 如果不在乎起点终点，也可以只靠 -through（文件末尾注释的两条），</span>
+<span class="c"># 语义是“只要穿过这两个引脚的路径都是伪路径”。</span>
+<span class="c">#</span>
+<span class="c"># 运行效果：</span>
+<span class="c">#   同侧通路（MUX0/I0 -&gt; MUX1/I0 等）仍然正常分析；</span>
+<span class="c">#   交叉通路被标为 EXCLUDED。</span>
+<span class="c">#</span>
+<span class="c"># 另外补了 input/output delay，让剩下的真实通路有 slack 可看。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 10 [get_ports clk]
+
+set_input_delay  <span class="k">-max</span> 2.0 <span class="k">-clock</span> clk [get_ports A]
+set_output_delay <span class="k">-max</span> 3.0 <span class="k">-clock</span> clk [get_ports B]
+
+set_false_path <span class="k">-from</span> [get_ports A] <span class="k">-through</span> [get_pins MUX0/I0] <span class="k">-through</span> [get_pins MUX1/I1] <span class="k">-to</span> [get_ports B]
+set_false_path <span class="k">-from</span> [get_ports A] <span class="k">-through</span> [get_pins MUX0/I1] <span class="k">-through</span> [get_pins MUX1/I0] <span class="k">-to</span> [get_ports B]
+
+<span class="c"># 等效写法：不限定起点终点，只要穿过这两个引脚就算伪路径</span>
+<span class="c"># set_false_path -through [get_pins MUX0/I0] -through [get_pins MUX1/I1]</span>
+<span class="c"># set_false_path -through [get_pins MUX0/I1] -through [get_pins MUX1/I0]</span></pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">input-&gt;output</dd>
+<dt>起点</dt><dd class="" style="">A</dd>
+<dt>终点</dt><dd class="" style="">B</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 10.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">0.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.302ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">2.302ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">7.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">5.000ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+4.6980ns</dd>
+</dl>
+<p class="note">A->B 的 4 条路径里，2 条交叉伪路径被屏蔽，2 条真实通路正常分析。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 465.85,52.00 465.85,76.00 877.70,76.00 877.70,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="877.70" y1="22.00" x2="877.70" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="877.70" y1="50.00" x2="877.70" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="877.70" cy="78.00" r="3.2" fill="#7c3aed"/><text x="877.70" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 10ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="218.74" y1="196.00" x2="218.74" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="218.74" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">2</text><line x1="383.48" y1="196.00" x2="383.48" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="383.48" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">4</text><line x1="548.22" y1="196.00" x2="548.22" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="548.22" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">6</text><line x1="712.96" y1="196.00" x2="712.96" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="712.96" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">8</text><line x1="877.70" y1="196.00" x2="877.70" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="877.70" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="1042.44" y1="196.00" x2="1042.44" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1042.44" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">12</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="0.00" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="54.00" y="115.00" width="189.62" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="148.81" y="128.00" font-size="9.5" text-anchor="middle" fill="#1e3a8a" font-weight="400" font-family="ui-monospace, Consolas, monospace">组合 0.30</text><text x="243.62" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 2.302</text><line x1="630.59" y1="110.00" x2="630.59" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="630.59" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 7.000</text><line x1="243.62" y1="168.00" x2="630.59" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="243.62" y1="164.00" x2="243.62" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="630.59" y1="164.00" x2="630.59" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="437.10" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +4.6980ns   （预算 5.0000）</text></svg>
+</div>
+<p class="note">另有 3 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">S → B</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>input-&gt;output</td><td class='mono'>A</td><td class='mono'>B</td><td>0.3020</td><td>5.0000</td><td class='ok'>+4.6980</td><td class=''>-</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>A</td><td class='mono'>B</td><td>0.2950</td><td>5.0000</td><td class='ok'>+4.7050</td><td class=''>-</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>A</td><td class='mono'>B</td><td>0.2980</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>EXCLUDED</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>A</td><td class='mono'>B</td><td>0.2990</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>EXCLUDED</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>S</td><td class='mono'>B</td><td>0.3350</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>S</td><td class='mono'>B</td><td>0.3380</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;output</td><td class='mono'>S</td><td class='mono'>B</td><td>0.1850</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex9_multicycle_adder--9">
+<header>
+<h2>多周期路径（正确约束）</h2>
+<span class="tag">ex9_multicycle_adder</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：多周期：setup 与 hold 配对</span>
+<p class="desc">set_multicycle_path -setup 6 把建立检查推到第 6 个上升沿（60ns），但会把保持检查连带挪到 50ns；必须再补 -hold 5 把它拉回 0ns。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 9：多周期路径（正确写法）</span>
+<span class="c">#</span>
+<span class="c"># 沿关系推导（本工具的实现方式，与 DC/PrimeTime 语义一致）：</span>
+<span class="c">#     设发送沿序号为 k，捕获时钟在它之后第一个上升沿的序号为 i0，则</span>
+<span class="c">#         建立捕获沿序号 = i0 + (M_setup - 1)</span>
+<span class="c">#         保持捕获沿序号 = 建立捕获沿序号 - 1 - M_hold</span>
+<span class="c">#</span>
+<span class="c"># 写成 -setup 6 / -hold 5（M_setup=6, M_hold=5），取发送沿 k=0：</span>
+<span class="c">#     建立沿 = 第 6 个上升沿 = 60ns</span>
+<span class="c">#     保持沿 = 6 - 1 - 5 = 第 0 个上升沿 = 0ns      &lt;- 被 -hold 5 从 50ns 拉回来了</span>
+<span class="c">#</span>
+<span class="c">#     budget   = 60 - Tco - Tsu - uncertainty = 60 - 1.0 - 1.0 = 58ns</span>
+<span class="c">#     保持要求 = Th + uncertainty = 0.5ns</span>
+<span class="c">#                （发送沿和捕获沿同一时刻，两端的时钟项直接抵消）</span>
+<span class="c">#</span>
+<span class="c"># 对比 ex9b_multicycle_adder_default_hold.sdc（不写 -hold 5 的版本）：</span>
+<span class="c">#   保持沿会停在 50ns，要求组合逻辑延时 &gt;= 50.5ns，而建立又要求 &lt;= 58ns ——</span>
+<span class="c">#   工具会被迫去凑一条延时在 50.5~58ns 之间的长路径，而真实逻辑只有零点几 ns。</span>
+<span class="c">#</span>
+<span class="c"># 口诀：-hold 的数值 = -setup 的数值 - 1。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 10 [get_ports clk]
+
+set_multicycle_path <span class="k">-setup</span> 6 <span class="k">-to</span> [get_pins FF3[*]/D]
+set_multicycle_path <span class="k">-hold</span>  5 <span class="k">-to</span> [get_pins FF3[*]/D]</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">FF3[1]/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 60.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">0.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.525ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">1.525ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">59.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">58.000ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+57.4750ns</dd>
+<dt>slack (hold)</dt><dd class="ok" style="">+1.0250ns</dd>
+<dt>多周期 (setup/hold)</dt><dd class="" style="">6 / 5</dd>
+</dl>
+<p class="note">建立 budget = 60 - Tco - Tsu = 58ns；保持检查沿被拉回 0ns。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 132.53,52.00 132.53,76.00 211.06,76.00 211.06,52.00 289.59,52.00 289.59,76.00 368.12,76.00 368.12,52.00 446.66,52.00 446.66,76.00 525.19,76.00 525.19,52.00 603.72,52.00 603.72,76.00 682.25,76.00 682.25,52.00 760.78,52.00 760.78,76.00 839.31,76.00 839.31,52.00 917.84,52.00 917.84,76.00 996.37,76.00 996.37,52.00 1074.90,52.00 1074.90,76.00 1153.44,76.00 1153.44,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#dc2626"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 0ns</text><line x1="54.00" y1="40.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="34.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="996.37" y1="22.00" x2="996.37" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="996.37" y1="50.00" x2="996.37" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="996.37" cy="78.00" r="3.2" fill="#7c3aed"/><text x="996.37" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 60ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="368.12" y1="196.00" x2="368.12" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="368.12" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="682.25" y1="196.00" x2="682.25" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="682.25" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">40</text><line x1="996.37" y1="196.00" x2="996.37" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="996.37" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">60</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="15.71" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="69.71" y="115.00" width="8.25" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="77.95" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 1.525</text><line x1="980.67" y1="110.00" x2="980.67" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="980.67" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 59.000</text><line x1="77.95" y1="168.00" x2="980.67" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="77.95" y1="164.00" x2="77.95" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="980.67" y1="164.00" x2="980.67" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="529.31" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +57.4750ns   （预算 58.0000）</text></svg>
+</div>
+<p class="note">另有 6 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">A0 → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF3[1]/D</td><td>0.5250</td><td>58.0000</td><td class='ok'>+57.4750</td><td class='ok'>+1.0250</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF3[0]/D</td><td>0.2700</td><td>58.0000</td><td class='ok'>+57.7300</td><td class='ok'>+0.7700</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF4/CP</td><td class='mono'>FF3[1]/D</td><td>0.2700</td><td>58.0000</td><td class='ok'>+57.7300</td><td class='ok'>+0.7700</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>A0</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>A1</td><td class='mono'>FF4/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>B0</td><td class='mono'>FF2/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>B1</td><td class='mono'>FF5/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF3[0]/CP</td><td class='mono'>S0</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF3[1]/CP</td><td class='mono'>S1</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex9b_multicycle_adder_default_hold--10">
+<header>
+<h2>多周期路径的反例：只写 -setup 6</h2>
+<span class="tag">ex9b_multicycle_adder_default_hold</span>
+<span class="tag bad">保持违例 3 条</span>
+<span class="tag">主题：多周期：漏掉 -hold 的后果</span>
+<p class="desc">故意不加 -hold 5。保持检查会停在 50ns，要求组合逻辑延时 >= 50.5ns，而建立又要求 <= 58ns —— 工具会被迫去凑一条毫无必要的长延时路径。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 9b：多周期路径的**反例** —— 只写 -setup 6</span>
+<span class="c"># --------------------------------------------------------------------------</span>
+<span class="c"># 这是多周期约束里最容易踩的坑：</span>
+<span class="c">#</span>
+<span class="c">#   set_multicycle_path -setup 6 把建立检查推到第 6 个上升沿（60ns），</span>
+<span class="c">#   但同时也会把**保持检查**从“发送沿同沿”自动挪到“建立沿的前一沿”（50ns）。</span>
+<span class="c">#</span>
+<span class="c">#   于是工具拿到的约束变成：</span>
+<span class="c">#       组合逻辑延时 &gt;= 50 + Th + uncertainty - Tco = 50.5ns   （保持）</span>
+<span class="c">#       组合逻辑延时 &lt;= 60 - Tco - Tsu - uncertainty = 58ns    （建立）</span>
+<span class="c">#   它必须去凑一条延时落在 50.5 ~ 58ns 之间的路径。</span>
+<span class="c">#   可真实的组合逻辑只有零点几 ns —— 这个约束完全是在要求工具做无用功，</span>
+<span class="c">#   白白增加面积和功耗。</span>
+<span class="c">#</span>
+<span class="c">#   物理上的道理：能在 60ns 破坏采样的，是 0ns 那一沿发出的数据</span>
+<span class="c">#   （它走了 6 个周期才到），所以保持检查应该落回 0ns。</span>
+<span class="c">#</span>
+<span class="c"># 所以这个文件故意不加 -hold 5，用来和 ex9_multicycle_adder.sdc 对照。</span>
+<span class="c"># 跑一下就能看到 -49ns 量级的、毫无意义的保持违例。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 10 [get_ports clk]
+
+set_multicycle_path <span class="k">-setup</span> 6 <span class="k">-to</span> [get_pins FF3[*]/D]
+
+<span class="c"># ↓↓↓ 少的就是这一行：它负责把保持沿从 50ns 拉回 0ns</span>
+<span class="c"># set_multicycle_path -hold 5 -to [get_pins FF3[*]/D]</span></pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">FF3[0]/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 60.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">50.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.000ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.270ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">1.270ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">59.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">58.000ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+57.7300ns</dd>
+<dt>slack (hold)</dt><dd class="bad" style="">-49.2300ns</dd>
+<dt>多周期 (setup/hold)</dt><dd class="" style="">6 / 0</dd>
+</dl>
+<p class="note">保持检查沿停在 50ns ⇒ 产生 -49ns 量级的、毫无意义的保持违例。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 260" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 132.53,52.00 132.53,76.00 211.06,76.00 211.06,52.00 289.59,52.00 289.59,76.00 368.12,76.00 368.12,52.00 446.66,52.00 446.66,76.00 525.19,76.00 525.19,52.00 603.72,52.00 603.72,76.00 682.25,76.00 682.25,52.00 760.78,52.00 760.78,76.00 839.31,76.00 839.31,52.00 917.84,52.00 917.84,76.00 996.37,76.00 996.37,52.00 1074.90,52.00 1074.90,76.00 1153.44,76.00 1153.44,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="839.31" y1="22.00" x2="839.31" y2="196.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="839.31" y1="50.00" x2="839.31" y2="78.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="839.31" cy="78.00" r="3.2" fill="#dc2626"/><text x="839.31" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 50ns</text><line x1="996.37" y1="22.00" x2="996.37" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="996.37" y1="50.00" x2="996.37" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="996.37" cy="78.00" r="3.2" fill="#7c3aed"/><text x="996.37" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 60ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="368.12" y1="196.00" x2="368.12" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="368.12" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">20</text><line x1="682.25" y1="196.00" x2="682.25" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="682.25" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">40</text><line x1="996.37" y1="196.00" x2="996.37" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="996.37" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">60</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="15.71" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="69.71" y="115.00" width="4.24" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="73.95" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 1.270</text><line x1="980.67" y1="110.00" x2="980.67" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="980.67" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 59.000</text><line x1="73.95" y1="168.00" x2="980.67" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="73.95" y1="164.00" x2="73.95" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="980.67" y1="164.00" x2="980.67" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="527.31" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +57.7300ns   （预算 58.0000）</text><rect x="54.00" y="210.00" width="1112.00" height="24.00" rx="5" fill="#fef2f2" stroke="#fecaca" opacity="1.0"/><text x="610.00" y="226.50" font-size="10.5" text-anchor="middle" fill="#b91c1c" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持时间违例：在 50ns 这一沿检查，要求组合逻辑延时 ≥ 49.5000ns，实际只有 0.2700ns ⇒ hold slack = -49.2300ns</text></svg>
+</div>
+<p class="note">另有 6 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">A0 → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF3[1]/D</td><td>0.5250</td><td>58.0000</td><td class='ok'>+57.4750</td><td class='bad'>-48.9750</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF3[0]/D</td><td>0.2700</td><td>58.0000</td><td class='ok'>+57.7300</td><td class='bad'>-49.2300</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF4/CP</td><td class='mono'>FF3[1]/D</td><td>0.2700</td><td>58.0000</td><td class='ok'>+57.7300</td><td class='bad'>-49.2300</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>A0</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>A1</td><td class='mono'>FF4/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>B0</td><td class='mono'>FF2/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>B1</td><td class='mono'>FF5/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF3[0]/CP</td><td class='mono'>S0</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF3[1]/CP</td><td class='mono'>S1</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<section class="card" id="ex10_multicycle_mixed--11">
+<header>
+<h2>多周期与单周期路径共存</h2>
+<span class="tag">ex10_multicycle_mixed</span>
+<span class="tag ok">全部满足</span>
+<span class="tag">主题：-through 限定作用范围</span>
+<p class="desc">乘法路径要 2 个周期、异或路径只要 1 个周期。-through Multiply/out 把多周期约束**只**加在乘法那条路径上，另一条保持默认。</p>
+</header>
+<div class="grid">
+<div>
+<pre><span class="c"># ==========================================================================</span>
+<span class="c"># 例 10：多周期路径与单周期路径共存</span>
+<span class="c">#</span>
+<span class="c"># 设计规格：乘法要 2 个周期，异或只要默认的 1 个周期。</span>
+<span class="c"># 用 -through 把多周期约束**只**加在乘法那条路径上：</span>
+<span class="c">#</span>
+<span class="c">#     set_multicycle_path -setup 2 -from FF1/CP -through Multiply/out -to FF2/D</span>
+<span class="c">#     set_multicycle_path -hold  1 -from FF1/CP -through Multiply/out -to FF2/D</span>
+<span class="c">#</span>
+<span class="c"># 如果去掉 -through，两条路径都会变成 2 周期，异或那条就被放松了 ——</span>
+<span class="c"># 可能综合出一条实际跑不到 1 个周期的电路。</span>
+<span class="c">#</span>
+<span class="c"># 沿关系：</span>
+<span class="c">#     乘法路径：建立沿 = 第 2 个上升沿 = 20ns；-hold 1 把保持沿拉回 0ns</span>
+<span class="c">#                =&gt; Tco 是 1.1ns（FF1/Q 扇出为 2，查表得出的 Tco 随负载变大）</span>
+<span class="c">#                =&gt; budget = 20 - 1.1 - 1.0 = 17.9ns</span>
+<span class="c">#     异或路径（普通路径）：仍是默认 1 个周期</span>
+<span class="c">#                =&gt; budget = 10 - 1.1 - 1.0 = 7.9ns</span>
+<span class="c">#</span>
+<span class="c"># 这样“同一对寄存器之间两条路径、不同周期数”就能被正确区分开。</span>
+<span class="c"># ==========================================================================</span>
+
+create_clock <span class="k">-period</span> 10 [get_ports clk]
+
+set_multicycle_path <span class="k">-setup</span> 2 <span class="k">-from</span> FF1/CP <span class="k">-through</span> Multiply/out <span class="k">-to</span> FF2/D
+set_multicycle_path <span class="k">-hold</span>  1 <span class="k">-from</span> FF1/CP <span class="k">-through</span> Multiply/out <span class="k">-to</span> FF2/D</pre>
+<dl class='kv'>
+<dt>路径类别</dt><dd class="" style="">reg-&gt;reg</dd>
+<dt>起点</dt><dd class="" style="">FF1/CP</dd>
+<dt>终点</dt><dd class="" style="">FF3/D</dd>
+<dt>发送沿 / 捕获沿</dt><dd class="" style="">0.000ns / 10.000ns</dd>
+<dt>保持检查沿</dt><dd class="" style="">0.000ns</dd>
+<dt>起点代价 (Tco)</dt><dd class="" style="">1.100ns</dd>
+<dt>组合逻辑延时</dt><dd class="" style="">0.120ns</dd>
+<dt>数据到达时间</dt><dd class="" style="">1.220ns</dd>
+<dt>数据需求时间</dt><dd class="" style="">9.000ns</dd>
+<dt>时序预算 budget</dt><dd style="color:#4338ca;font-weight:700;">7.900ns</dd>
+<dt>slack (setup)</dt><dd class="ok" style="font-weight:700;">+7.7800ns</dd>
+<dt>slack (hold)</dt><dd class="ok" style="">+0.7200ns</dd>
+</dl>
+<p class="note">乘法路径 budget = 20 - Tco - Tsu = 17.9ns（Tco 因扇出为 2 变成 1.1ns）；异或路径仍按 1 个周期，budget 7.9ns。</p>
+</div>
+</div>
+<div class="wavewrap">
+<svg class="wave " viewBox="0 0 1180 226" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><text x="8.00" y="70.00" font-size="11" text-anchor="start" fill="#0369a1" font-weight="600" font-family="ui-monospace, Consolas, monospace">clk</text><polyline points="54.00,76.00 54.00,76.00 54.00,52.00 465.85,52.00 465.85,76.00 877.70,76.00 877.70,52.00 1166.00,52.00 1166.00,76.00 1166.00,76.00" fill="none" stroke="#0ea5e9" stroke-width="1.8" stroke-linejoin="round"/><line x1="54.00" y1="22.00" x2="54.00" y2="196.00" stroke="#dc2626" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#dc2626" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#dc2626"/><text x="54.00" y="16.00" font-size="10.5" text-anchor="middle" fill="#dc2626" font-weight="700" font-family="ui-monospace, Consolas, monospace">保持捕获沿 0ns</text><line x1="54.00" y1="40.00" x2="54.00" y2="196.00" stroke="#0284c7" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="54.00" y1="50.00" x2="54.00" y2="78.00" stroke="#0284c7" stroke-width="1.8" stroke-linecap="butt"/><circle cx="54.00" cy="78.00" r="3.2" fill="#0284c7"/><text x="54.00" y="34.00" font-size="10.5" text-anchor="middle" fill="#0284c7" font-weight="700" font-family="ui-monospace, Consolas, monospace">发送沿 0ns</text><line x1="877.70" y1="22.00" x2="877.70" y2="196.00" stroke="#7c3aed" stroke-width="1.3" stroke-linecap="butt" stroke-dasharray="4 4"/><line x1="877.70" y1="50.00" x2="877.70" y2="78.00" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="butt"/><circle cx="877.70" cy="78.00" r="3.2" fill="#7c3aed"/><text x="877.70" y="16.00" font-size="10.5" text-anchor="middle" fill="#7c3aed" font-weight="700" font-family="ui-monospace, Consolas, monospace">建立捕获沿 10ns</text><line x1="54.00" y1="196.00" x2="1166.00" y2="196.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><line x1="54.00" y1="196.00" x2="54.00" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="54.00" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">0</text><line x1="218.74" y1="196.00" x2="218.74" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="218.74" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">2</text><line x1="383.48" y1="196.00" x2="383.48" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="383.48" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">4</text><line x1="548.22" y1="196.00" x2="548.22" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="548.22" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">6</text><line x1="712.96" y1="196.00" x2="712.96" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="712.96" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">8</text><line x1="877.70" y1="196.00" x2="877.70" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="877.70" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">10</text><line x1="1042.44" y1="196.00" x2="1042.44" y2="200.00" stroke="#cbd5e1" stroke-width="1" stroke-linecap="butt"/><text x="1042.44" y="212.00" font-size="10" text-anchor="middle" fill="#94a3b8" font-weight="400" font-family="ui-monospace, Consolas, monospace">12</text><text x="10.00" y="128.00" font-size="11" text-anchor="start" fill="#334155" font-weight="600" font-family="ui-monospace, Consolas, monospace">数据</text><rect x="54.00" y="115.00" width="90.61" height="18.00" rx="3" fill="#fed7aa" stroke="#fb923c" opacity="1.0"/><rect x="144.61" y="115.00" width="9.88" height="18.00" rx="3" fill="#bfdbfe" stroke="#60a5fa" opacity="1.0"/><text x="99.30" y="128.00" font-size="9.5" text-anchor="middle" fill="#9a3412" font-weight="400" font-family="ui-monospace, Consolas, monospace">Tco</text><text x="154.49" y="110.00" font-size="10" text-anchor="middle" fill="#1e293b" font-weight="600" font-family="ui-monospace, Consolas, monospace">到达 1.220</text><line x1="795.33" y1="110.00" x2="795.33" y2="138.00" stroke="#16a34a" stroke-width="2.0" stroke-linecap="butt"/><text x="795.33" y="151.00" font-size="10" text-anchor="middle" fill="#15803d" font-weight="600" font-family="ui-monospace, Consolas, monospace">需求 9.000</text><line x1="154.49" y1="168.00" x2="795.33" y2="168.00" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/><line x1="154.49" y1="164.00" x2="154.49" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><line x1="795.33" y1="164.00" x2="795.33" y2="172.00" stroke="#16a34a" stroke-width="1.6" stroke-linecap="butt"/><text x="474.91" y="160.00" font-size="11" text-anchor="middle" fill="#16a34a" font-weight="700" font-family="ui-monospace, Consolas, monospace">slack = +7.7800ns   （预算 7.9000）</text></svg>
+</div>
+<p class="note">另有 5 条路径未加 I/O 约束，未参与时序检查（例如 <span class="mono">in_a → FF1/D</span>）。</p>
+<details><summary>展开：该例所有路径</summary>
+<table><thead><tr><th>类别</th><th>起点</th><th>终点</th><th>组合</th><th>预算</th><th>slack</th><th>hold</th><th>判定</th></tr></thead><tbody>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF3/D</td><td>0.1200</td><td>7.9000</td><td class='ok'>+7.7800</td><td class='ok'>+0.7200</td><td class='ok'>MET</td></tr>
+<tr><td>reg-&gt;reg</td><td class='mono'>FF1/CP</td><td class='mono'>FF2/D</td><td>7.0700</td><td>17.9000</td><td class='ok'>+10.8300</td><td class='ok'>+7.6700</td><td class='ok'>MET</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>in_a</td><td class='mono'>FF1/D</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>in_b</td><td class='mono'>FF2/D</td><td>7.4700</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>input-&gt;reg</td><td class='mono'>in_b</td><td class='mono'>FF3/D</td><td>0.1250</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF2/CP</td><td class='mono'>out_y</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+<tr><td>reg-&gt;output</td><td class='mono'>FF3/CP</td><td class='mono'>out_z</td><td>0.0000</td><td>-</td><td class='mute'>-</td><td class=''>-</td><td class='mute'>UNCONSTRAINED</td></tr>
+</tbody></table></details>
+</section>
+<p class='sub' style='margin-top:28px'>由 <code>pysta</code> 生成，纯 SVG，无第三方依赖。</p>
+</div></body></html>

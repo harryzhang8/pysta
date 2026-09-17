@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>pysta · 纯 Python 静态时序分析引擎</title>
+<meta name="description" content="零第三方依赖的静态时序分析（STA）引擎，纯 Python 标准库实现：解析 Liberty / Verilog 网表 / SDC，建时序图，算建立保持 slack。"/>
+<meta property="og:title" content="pysta · 纯 Python 静态时序分析引擎"/>
+<meta property="og:description" content="零依赖 STA 引擎：解析 Liberty / 门级 Verilog / SDC，建时序图，算建立保持 slack。用 fractions.Fraction 做精确有理数运算。"/>
+<meta property="og:type" content="website"/>
+<style>
+  :root{
+    --ink:#0f172a; --mid:#334155; --soft:#64748b; --faint:#94a3b8;
+    --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff;
+    --blue:#2563eb; --green:#15803d; --red:#dc2626; --amber:#b45309;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",
+                "Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:16px;line-height:1.75;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,pre,.mono{
+    font-family:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  }
+  code{background:#eef2f7;padding:.15em .4em;border-radius:4px;font-size:.9em}
+  pre{
+    background:#0f172a;color:#e2e8f0;padding:16px 18px;border-radius:10px;
+    overflow:auto;font-size:13.5px;line-height:1.65;margin:16px 0;
+  }
+  pre code{background:none;padding:0;color:inherit;font-size:inherit}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px}
+  header{
+    background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#1e3a8a 100%);
+    color:#f1f5f9;padding:58px 0 50px;
+  }
+  header h1{margin:0;font-size:2.7rem;letter-spacing:-.02em;font-weight:700}
+  header .tag{margin:10px 0 0;font-size:1.08rem;color:#cbd5e1}
+  header .sub{margin:6px 0 0;font-size:.95rem;color:#94a3b8}
+  .btns{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px}
+  .btn{
+    display:inline-block;padding:9px 17px;border-radius:8px;font-size:.92rem;
+    border:1px solid rgba(255,255,255,.28);color:#f1f5f9;background:rgba(255,255,255,.07);
+  }
+  .btn:hover{background:rgba(255,255,255,.16);text-decoration:none}
+  .btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+  .btn.primary:hover{background:#1d4ed8}
+  .stats{
+    display:flex;flex-wrap:wrap;gap:26px;margin-top:32px;
+    padding-top:22px;border-top:1px solid rgba(255,255,255,.15);
+  }
+  .stat b{display:block;font-size:1.5rem;line-height:1.2;color:#fff}
+  .stat span{font-size:.8rem;color:#94a3b8}
+  section{padding:44px 0}
+  section + section{border-top:1px solid var(--line)}
+  h2{font-size:1.45rem;margin:0 0 6px;letter-spacing:-.01em}
+  h2 + .lead{margin-top:0;color:var(--soft);font-size:.97rem}
+  h3{font-size:1.02rem;margin:26px 0 6px}
+  figure{margin:22px 0}
+  figure img{
+    width:100%;height:auto;display:block;background:#fff;
+    border:1px solid var(--line);border-radius:12px;
+  }
+  figcaption{margin-top:10px;font-size:.86rem;color:var(--soft)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:22px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;
+  }
+  .card h3{margin:0 0 6px;font-size:.98rem}
+  .card p{margin:0;font-size:.9rem;color:var(--mid);line-height:1.7}
+  .note{
+    background:#fff;border:1px solid var(--line);border-left:3px solid var(--amber);
+    border-radius:8px;padding:14px 18px;margin:20px 0;font-size:.93rem;color:var(--mid);
+  }
+  .note.bad{border-left-color:var(--red)}
+  .note.good{border-left-color:var(--green)}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font-size:.9rem}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}
+  th{background:#f1f5f9;font-weight:600;color:var(--mid)}
+  td.mono{font-family:ui-monospace,Consolas,monospace;font-size:.86rem}
+  .ok{color:var(--green);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
+  footer{
+    padding:34px 0 46px;border-top:1px solid var(--line);
+    font-size:.87rem;color:var(--soft);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>pysta</h1>
+    <p class="tag">纯 Python 的静态时序分析引擎 · 零第三方依赖</p>
+    <p class="sub">解析 Liberty 工艺库 / 门级 Verilog 网表 / SDC 约束 → 建时序图 → 算建立与保持 slack</p>
+    <div class="btns">
+      <a class="btn primary" href="demo/timing_visualization.html">▶ 交互式时序报告</a>
+      <a class="btn" href="https://github.com/harryzhang8/pysta">GitHub 仓库</a>
+      <a class="btn" href="https://github.com/harryzhang8/pysta/blob/main/README.zh-CN.md">中文文档</a>
+      <a class="btn" href="https://github.com/harryzhang8/pysta/blob/main/README.md">English</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>0</b><span>第三方运行时依赖</span></div>
+      <div class="stat"><b>12</b><span>示例，各讲一个时序概念</span></div>
+      <div class="stat"><b>32</b><span>期望值断言，全过</span></div>
+      <div class="stat"><b>137</b><span>单元测试</span></div>
+      <div class="stat"><b>3×3</b><span>CI：3 系统 × 3 Python</span></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>它解决什么问题</h2>
+    <p class="lead">商业 STA 工具闭源且庞大。想搞明白"为什么写了 <code>set_multicycle_path -setup 6</code> 就必须补一条 <code>-hold 5</code>"，通常只能翻厂商手册。</p>
+    <p><code>pysta</code> 把有意思的部分用大约两千行可读的 Python 重写了一遍：你可以单步调试、打印中间值、也可以故意改坏它看会怎样。</p>
+    <p>里面的每个数字都能手算对上，因为时间量一律用 <code>fractions.Fraction</code> 存储 —— 不是 <code>float</code>。所以 <code>1.0/75*1000</code> 精确等于 <code>40/3</code>，而 <code>40/3 * 3</code> 精确等于 <code>40</code>。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>最有说服力的一张图</h2>
+    <p class="lead">同样一条多周期路径，只差一个 <code>-hold 5</code>。</p>
+
+    <figure>
+      <img src="images/waveform-multicycle.svg" alt="ex9：-setup 6 -hold 5，建立与保持都通过"/>
+      <figcaption><b>正确写法</b>（<code>ex9</code>）：<code>-setup 6 -hold 5</code>时，建立沿落在 60 ns 处，保持沿被拉回 0 ns。左边通过 +57.475 ns，右边通过 +1.025 ns。</figcaption>
+    </figure>
+
+    <figure>
+      <img src="images/waveform-hold-violation.svg" alt="ex9b：只写 -setup 6，保持沿被拖到 50 ns，产生 -49.23 ns 保持违例"/>
+      <figcaption><b>反例</b>（<code>ex9b</code>）：只写 <code>-setup 6</code>，不写 <code>-hold 5</code>。</figcaption>
+    </figure>
+
+    <div class="note bad">
+      反例里的建立余量还是 <b>+57.73 ns</b> —— 只跑 setup 的流程会认为这个设计完全干净 ——
+      但保持检查已经被拖到 50 ns 那个沿上，实测差了 <b class="bad">−49.23 ns</b>。
+      这正是 <code>pysta</code> 想暴露的那类 bug。
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>跑起来</h2>
+    <p class="lead">不用装任何东西，标准库就够了。</p>
+<pre><code>git clone https://github.com/harryzhang8/pysta
+cd pysta
+
+python -m pysta list      # 列出所有示例
+python -m pysta check     # 跑全部示例并核对 32 条期望值
+python -m pysta report ex9   # 打印 report_timing 风格报告
+python -m pysta run       # 输出报告 + 交互式波形 HTML 到 ./out/</code></pre>
+    <p><code>pysta check</code> 就是 CI 跑的东西：任何一条对不上就返回非零。</p>
+
+    <h3>当成库用</h3>
+<pre><code>from pysta import Design, analyze
+from pysta.paths import DEFAULT_LIB, NETLIST_DIR, SDC_DIR
+
+design = Design.build(DEFAULT_LIB,
+                      NETLIST_DIR / "ex1_reg2reg.v",
+                      SDC_DIR / "ex1_reg2reg.sdc")
+result = analyze(design)
+
+for pt in result.worst_setup(3):
+    print(f"{pt.path.startpoint} -> {pt.path.endpoint}")
+    print(f"  arrival  = {float(pt.arr):.4f} ns")
+    print(f"  required = {float(pt.req_setup):.4f} ns")
+    print(f"  slack    = {float(pt.slack_setup):+.4f} ns  ({pt.verdict})")</code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>实现了什么</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Liberty <code>.lib</code></h3>
+        <p>通用 group/attribute 语法解析器；NLDM 一维/二维查找表，双线性插值 + 线性外推；cell / pin / <code>ff</code> 组；建立保持约束和 clock-to-Q 弧。</p>
+      </div>
+      <div class="card">
+        <h3>门级 Verilog 网表</h3>
+        <p>模块端口、总线展开（<code>input [7:0] A;</code> → <code>A[7]..A[0]</code>）、数组实例名（<code>FF3[0]</code>）、具名与位置连接、<code>assign</code> 网络别名。行为级 RTL 会明确报错。</p>
+      </div>
+      <div class="card">
+        <h3>SDC / Tcl</h3>
+        <p><code>create_clock</code>（含虚拟时钟与自定义波形）、不确定度、转换时间、latency、<code>set_input_delay</code> / <code>set_output_delay</code> / <code>set_max_delay</code> / <code>set_false_path</code> / <code>set_clock_groups</code> / <code>set_multicycle_path</code>，以及 Tcl <code>expr</code> 求值器。</p>
+      </div>
+      <div class="card">
+        <h3>分析</h3>
+        <p>建时序图、穿过缓冲器传播时钟树、枚举所有起终点之间的路径，在<b>所有时钟的公共基周期</b>上取最差建立/保持。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>几个容易踩的坑，这里都实现了</h2>
+
+    <h3>时钟沿关系</h3>
+    <p>设发送沿为 <code>t_L</code>，<code>i0</code> 是严格晚于 <code>t_L</code> 的第一个捕获时钟上升沿下标：</p>
+<pre><code>建立捕获沿下标 = i0 + (M_setup - 1)
+保持捕获沿下标 = 建立捕获沿下标 - 1 - M_hold</code></pre>
+    <p><code>M_setup</code> 默认 1、<code>M_hold</code> 默认 0，所以建立检查在下一个沿、保持检查在<b>和发送沿同一个沿</b> —— 这就是"保持比建立提前一个沿"的实际含义。10 ns 时钟上写 <code>-setup 6</code> 会把保持沿一起拖到 50 ns，补上 <code>-hold 5</code> 才拉回 <code>6-1-5=0</code>。</p>
+
+    <h3>公共基周期</h3>
+    <p>多时钟时引擎会遍历 <code>LCM(T1, T2, ...)</code> 内的<b>每一个</b>发送沿并取最差 slack。所以"两个周期直接相减"会算错：<code>LCM(30,20)=60</code>，最差的一组是 30 → 40；<code>LCM(20,40/3,10)=40</code>，最差一组是 20 → 80/3。</p>
+
+    <h3>Tcl 整数除法</h3>
+    <p><code>expr</code> 刻意保留 Tcl 语义：<code>1/75</code> 是整数除法得 <code>0</code>，<code>1.0/75</code> 才是浮点。这是 SDC 里经典的静默 bug，所以求值器会跟踪一个值是不是整数并按需截断。</p>
+
+    <h3><code>-add_delay</code> 语义</h3>
+    <p>不加 <code>-add_delay</code> 时，后一条 <code>set_output_delay</code> <b>替换</b>前一条。解析器实现该规则并给出告警，分析器则对<b>每一条存留约束分别求值</b>取最差 —— <code>ex6</code> 里起作用的是 <code>clkc</code> 的 2.5 ns，而不是 <code>clkd</code> 的 4.5 ns。</p>
+
+    <h3>单元延时随负载变化</h3>
+    <p><code>Tco</code> 和普通组合弧走同一张 NLDM 表，所以会随扇出增大。<code>ex10</code> 里 <code>FF1/Q</code> 驱动两个负载，<code>Tco</code> 从 1.0 ns 涨到 1.1 ns，两周期预算因此是 17.9 ns 而不是想当然的 18.0 ns。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>局限</h2>
+    <p class="lead"><code>pysta</code> 是教学引擎，<b>不能</b>替代 PrimeTime / OpenSTA。</p>
+    <table>
+      <tr><th></th><th>pysta</th><th>生产级 STA</th></tr>
+      <tr><td>延时模型</td><td>单元表 + 线负载模型（默认理想线）</td><td>+ 寄生参数提取（SPEF）</td></tr>
+      <tr><td>时钟树</td><td>用 SDC 里的 latency 数字，不真实传播</td><td>按实际时钟树传播</td></tr>
+      <tr><td>路径搜索</td><td>穷举简单路径</td><td>时序图最差路径算法</td></tr>
+      <tr><td>时序弧</td><td>以 max / 建立为主，保持只算寄存器终点</td><td>完整 max/min，上升下降分别建模</td></tr>
+      <tr><td>优化</td><td>只报不改</td><td>改尺寸、插缓冲器、重定时</td></tr>
+      <tr><td>串扰 / SI</td><td>不建模</td><td>完整 SI 分析</td></tr>
+    </table>
+    <div class="note">不要用它给真实设计签核。</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="https://github.com/harryzhang8/pysta">github.com/harryzhang8/pysta</a> ·
+      Apache License 2.0 · © 2026 harryzhang8
+    </p>
+    <p style="margin-top:6px">本页与所有波形图均由引擎自身生成，无外部资源依赖。</p>
+  </div>
+</footer>
+
+</body>
+</html>
