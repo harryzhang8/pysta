@@ -1,0 +1,28 @@
+# 字节码 / 构建产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# 运行产物
+out/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# 可选工具链（tools/fetch_oss_cad_suite.py 下载的东西）
+tools/oss-cad-suite/
+tools/*.tgz

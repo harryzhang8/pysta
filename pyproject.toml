@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pysta"
+version = "0.1.0"
+description = "Dependency-free mini static timing analysis (STA) engine in pure Python"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "harryzhang8", email = "harryzhang8@users.noreply.github.com" }]
+keywords = [
+  "sta", "static-timing-analysis", "timing", "sdc", "liberty",
+  "verilog", "netlist", "eda", "asic", "fpga", "setup", "hold",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+  "Topic :: Education",
+]
+
+[project.urls]
+Homepage = "https://github.com/harryzhang8/pysta"
+Source = "https://github.com/harryzhang8/pysta"
+Issues = "https://github.com/harryzhang8/pysta/issues"
+
+[project.scripts]
+pysta = "pysta.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pysta = ["examples/lib/*", "examples/netlist/*", "examples/rtl/*", "examples/sdc/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

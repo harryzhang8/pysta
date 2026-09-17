@@ -1,0 +1,315 @@
+/*
+ * tt_simple.lib —— 教学用简化工艺库
+ * =================================
+ * 这是一个"长得像真的"Liberty 文件，语法结构、查表模型（NLDM）、
+ * setup/hold 约束的写法都和工业库一致，只是单元数量和数值被大幅简化，
+ * 让示例里手算出来的数字能对得整整齐齐。
+ *
+ * 关键数值：
+ *   触发器 DFFRQ:  Tsu = 1.0ns   Th = 0.5ns   Tco(CP->Q) = 1.0ns
+ *   组合逻辑单元:  延时 = 0.0ns(空载) + 斜率 × 输出负载
+ *
+ * 查表说明：
+ *   index_1 = 输入转换时间(slew) ，本库只有 0.02ns 一个点，即延时与 slew 无关；
+ *   index_2 = 输出负载(load, 单位 pf)，0.00 与 0.05 两个点做线性插值/外推。
+ *   每个输入引脚的电容都是 0.05pf，所以"扇出=1"时负载正好 0.05 ——
+ *   正好落在表里第二个点上，得到的就是 books 上那个整数延时。
+ */
+
+library (tt_simple) {
+  delay_model               : table_lookup;
+  time_unit                 : "1ns";
+  voltage_unit              : "1V";
+  current_unit              : "1mA";
+  capacitive_load_unit      (1, pf);
+  pulling_resistance_unit   : "1kohm";
+  leakage_power_unit        : "1nW";
+  nom_process               : 1.0;
+  nom_temperature           : 25.0;
+  nom_voltage               : 1.0;
+  default_max_transition    : 0.50;
+
+  /* ---------------- 时钟缓冲器 ---------------- */
+  cell (CLKBUF) {
+    area : 2.0;
+    pin (A) {
+      direction        : input;
+      capacitance      : 0.05;
+    }
+    pin (Y) {
+      direction        : output;
+      function         : "A";
+      max_capacitance  : 0.50;
+      timing () {
+        related_pin    : "A";
+        timing_type    : combinational;
+        cell_rise (clkbuf_rise) {
+          index_1 ("0.02");
+          index_2 ("0.00, 0.05");
+          values  ("0.020, 0.030");
+        }
+        cell_fall (clkbuf_fall) {
+          index_1 ("0.02");
+          index_2 ("0.00, 0.05");
+          values  ("0.020, 0.030");
+        }
+      }
+    }
+  }
+
+  /* ---------------- 反相器 / 缓冲器 ---------------- */
+  cell (INVX1) {
+    area : 1.0;
+    pin (A) {
+      direction   : input;
+      capacitance : 0.05;
+    }
+    pin (Y) {
+      direction : output;
+      function  : "!A";
+      timing () {
+        related_pin : "A";
+        timing_type : combinational;
+        cell_rise (inv_rise) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.040, 0.060"); }
+        cell_fall (inv_fall) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.040, 0.060"); }
+      }
+    }
+  }
+
+  cell (BUFX1) {
+    area : 1.5;
+    pin (A) {
+      direction   : input;
+      capacitance : 0.05;
+    }
+    pin (Y) {
+      direction : output;
+      function  : "A";
+      timing () {
+        related_pin : "A";
+        timing_type : combinational;
+        cell_rise (buf_rise) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.050, 0.075"); }
+        cell_fall (buf_fall) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.050, 0.075"); }
+      }
+    }
+  }
+
+  /* ---------------- 二输入逻辑 ---------------- */
+  cell (NAND2X1) {
+    area : 2.0;
+    pin (A) { direction : input; capacitance : 0.05; }
+    pin (B) { direction : input; capacitance : 0.05; }
+    pin (Y) {
+      direction : output;
+      function  : "!(A*B)";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (nand_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.050, 0.075"); }
+        cell_fall (nand_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.050, 0.075"); }
+      }
+      timing () {
+        related_pin : "B"; timing_type : combinational;
+        cell_rise (nand_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.055, 0.080"); }
+        cell_fall (nand_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.055, 0.080"); }
+      }
+    }
+  }
+
+  cell (AND2X1) {
+    area : 2.5;
+    pin (A) { direction : input; capacitance : 0.05; }
+    pin (B) { direction : input; capacitance : 0.05; }
+    pin (Y) {
+      direction : output;
+      function  : "A*B";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (and_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.060, 0.090"); }
+        cell_fall (and_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.060, 0.090"); }
+      }
+      timing () {
+        related_pin : "B"; timing_type : combinational;
+        cell_rise (and_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.065, 0.095"); }
+        cell_fall (and_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.065, 0.095"); }
+      }
+    }
+  }
+
+  cell (OR2X1) {
+    area : 2.5;
+    pin (A) { direction : input; capacitance : 0.05; }
+    pin (B) { direction : input; capacitance : 0.05; }
+    pin (Y) {
+      direction : output;
+      function  : "A+B";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (or_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.060, 0.090"); }
+        cell_fall (or_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.060, 0.090"); }
+      }
+      timing () {
+        related_pin : "B"; timing_type : combinational;
+        cell_rise (or_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.065, 0.095"); }
+        cell_fall (or_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.065, 0.095"); }
+      }
+    }
+  }
+
+  cell (XOR2X1) {
+    area : 3.5;
+    pin (A) { direction : input; capacitance : 0.05; }
+    pin (B) { direction : input; capacitance : 0.05; }
+    pin (Y) {
+      direction : output;
+      function  : "A^B";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (xor_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.080, 0.120"); }
+        cell_fall (xor_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.080, 0.120"); }
+      }
+      timing () {
+        related_pin : "B"; timing_type : combinational;
+        cell_rise (xor_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.085, 0.125"); }
+        cell_fall (xor_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.085, 0.125"); }
+      }
+    }
+  }
+
+  /* ---------------- 二选一 MUX（伪路径例子要用） ---------------- */
+  cell (MUX2X1) {
+    area : 3.0;
+    pin (I0) { direction : input; capacitance : 0.05; }
+    pin (I1) { direction : input; capacitance : 0.05; }
+    pin (S)  { direction : input; capacitance : 0.05; }
+    pin (Y) {
+      direction : output;
+      function  : "(I0*!S)+(I1*S)";
+      timing () {
+        related_pin : "I0"; timing_type : combinational;
+        cell_rise (mux_i0) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.070, 0.105"); }
+        cell_fall (mux_i0) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.070, 0.105"); }
+      }
+      timing () {
+        related_pin : "I1"; timing_type : combinational;
+        cell_rise (mux_i1) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.072, 0.108"); }
+        cell_fall (mux_i1) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.072, 0.108"); }
+      }
+      timing () {
+        related_pin : "S"; timing_type : combinational;
+        cell_rise (mux_s) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.090, 0.135"); }
+        cell_fall (mux_s) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.090, 0.135"); }
+      }
+    }
+  }
+
+  /* ---------------- 全加器 ---------------- */
+  cell (ADDFA) {
+    area : 6.0;
+    pin (A)  { direction : input; capacitance : 0.05; }
+    pin (B)  { direction : input; capacitance : 0.05; }
+    pin (CI) { direction : input; capacitance : 0.05; }
+    pin (S) {
+      direction : output;
+      function  : "A^B^CI";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (fa_s) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.180, 0.270"); }
+        cell_fall (fa_s) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.180, 0.270"); }
+      }
+      timing () {
+        related_pin : "CI"; timing_type : combinational;
+        cell_rise (fa_s_ci) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.150, 0.225"); }
+        cell_fall (fa_s_ci) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.150, 0.225"); }
+      }
+    }
+    pin (CO) {
+      direction : output;
+      function  : "(A*B)+(A*CI)+(B*CI)";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (fa_co) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.200, 0.300"); }
+        cell_fall (fa_co) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.200, 0.300"); }
+      }
+      timing () {
+        related_pin : "CI"; timing_type : combinational;
+        cell_rise (fa_co_ci) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.160, 0.240"); }
+        cell_fall (fa_co_ci) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.160, 0.240"); }
+      }
+    }
+  }
+
+  /* ---------------- 8x8 乘法器宏单元（多周期路径示例用） -------------
+   * 组合宏单元，输入到输出之间是纯组合逻辑，延时随负载线性增长。
+   * 示例 ex10 对这条路径做 2 个时钟周期的多周期约束。
+   */
+  cell (MULT8X8) {
+    area : 420.0;
+    pin (A)  { direction : input; capacitance : 0.05; }
+    pin (B)  { direction : input; capacitance : 0.05; }
+    /* 输出引脚叫 out，这样 SDC 里可以直接写 -through Multiply/out */
+    pin (out) {
+      direction : output;
+      function  : "A*B";
+      timing () {
+        related_pin : "A"; timing_type : combinational;
+        cell_rise (mult_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("3.400, 5.100"); }
+        cell_fall (mult_a) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("3.400, 5.100"); }
+      }
+      timing () {
+        related_pin : "B"; timing_type : combinational;
+        cell_rise (mult_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("3.600, 5.400"); }
+        cell_fall (mult_b) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("3.600, 5.400"); }
+      }
+    }
+  }
+
+  /* ---------------- D 触发器（Tsu/Th/Tco 用整齐的教学值） ---------------- */
+  cell (DFFRQ) {
+    area : 12.0;
+    ff (IQ, IQN) {
+      next_state : "D";
+      clocked_on : "CP";
+    }
+    pin (CP) {
+      direction   : input;
+      capacitance : 0.05;
+      clock       : true;
+    }
+    pin (D) {
+      direction   : input;
+      capacitance : 0.05;
+      timing () {
+        related_pin : "CP";
+        timing_type : setup_rising;
+        rise_constraint (dff_setup) { values ("1.0"); }
+        fall_constraint (dff_setup_f) { values ("1.0"); }
+      }
+      timing () {
+        related_pin : "CP";
+        timing_type : hold_rising;
+        rise_constraint (dff_hold) { values ("0.5"); }
+        fall_constraint (dff_hold_f) { values ("0.5"); }
+      }
+    }
+    pin (Q) {
+      direction   : output;
+      function    : "IQ";
+      timing () {
+        related_pin : "CP";
+        timing_type : rising_edge;
+        cell_rise (dff_cq) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.900, 1.000"); }
+        cell_fall (dff_cq) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.900, 1.000"); }
+      }
+    }
+    pin (QN) {
+      direction   : output;
+      function    : "IQN";
+      timing () {
+        related_pin : "CP";
+        timing_type : rising_edge;
+        cell_rise (dff_cqn) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.900, 1.000"); }
+        cell_fall (dff_cqn) { index_1 ("0.02"); index_2 ("0.00, 0.05"); values ("0.900, 1.000"); }
+      }
+    }
+  }
+}
